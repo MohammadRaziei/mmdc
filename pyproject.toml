@@ -1,0 +1,189 @@
+[build-system]
+requires = ["hatchling", "hatch-requirements-txt"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mmdc"
+dynamic = ["version", "dependencies"]
+description = ""
+readme = "README.md"
+requires-python = ">=3.7"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "Mohammad Raziei", email = "mohammadraziei1375@gmail.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Operating System :: OS Independent",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+
+#dependencies = []
+[tool.hatch.metadata.hooks.requirements_txt]
+files = ["requirements.txt"]
+
+[project.urls]
+Source = "https://github.com/mohammadraziei/mmdc"
+Issues = "https://github.com/mohammadraziei/mmdc/issues"
+Documentation = "https://mohammadraziei.github.io/mmdc" 
+
+
+[tool.hatch.version]
+path = "mmdc/__about__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mmdc"]
+
+[tool.hatch.envs.default]
+dependencies = [
+  "coverage[toml]>=6.5",
+  "pytest",
+]
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+test-cov = "coverage run -m pytest {args:tests}"
+cov-report = [
+  "- coverage combine",
+  "coverage report",
+]
+cov = [
+  "test-cov",
+  "cov-report",
+]
+
+[[tool.hatch.envs.all.matrix]]
+python = ["3.7", "3.8", "3.9", "3.10", "3.11"]
+
+[tool.hatch.envs.lint]
+detached = true
+dependencies = [
+  "black>=23.1.0",
+  "mypy>=1.0.0",
+  "ruff>=0.0.243",
+]
+
+[tool.hatch.envs.lint.scripts]
+typing = "mypy --install-types --non-interactive {args:mmdc tests}"
+style = [
+  "ruff check {args:.}",
+  "black --check --diff {args:.}",
+]
+fmt = [
+  "black {args:.}",
+  "ruff --fix {args:.}",
+  "style",
+]
+all = [
+  "style",
+  "typing",
+]
+
+[tool.black]
+target-version = ["py37"]
+line-length = 120
+skip-string-normalization = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = [
+    # "error",
+    "ignore:(ast.Str|Attribute s|ast.NameConstant|ast.Num) is deprecated:DeprecationWarning:_pytest",  # Python 3.12
+]
+testpaths = ["tests"]
+pythonpath = [
+  "."
+]
+
+
+[tool.ruff]
+target-version = "py37"
+line-length = 120
+
+[tool.ruff.lint]  # Ruff linting configuration
+select = [        # List of lint rule codes to enable
+  "A",            # Built-in rules for potential errors
+  "ARG",          # Argument-related checks
+  "B",            # Bugbear: likely bugs and design problems
+  "C",            # Complexity checks
+  "DTZ",          # Datetime-related issues
+  "E", "EM",      # pycodestyle errors, error messages
+  "F", "FBT",     # Pyflakes, boolean trap checks
+  "I", "ICN", "ISC", # Import sorting, conventions, string concatenation
+  "N",            # Naming conventions
+  "PLC", "PLE", "PLR", "PLW", # Pylint checks (convention, error, refactor, warning)
+  "Q",            # Quotes
+  "RUF",          # Ruff-specific rules
+  "S",            # Security issues
+  "T", "TID",     # Type annotations, tidy imports
+  "UP",           # pyupgrade: modernize code
+  "W",            # pycodestyle warnings
+  "YTT",          # sys.version checks
+]
+ignore = [
+  # Allow non-abstract empty methods in abstract base classes
+  "B027",
+  # Allow boolean positional values in function calls, like `dict.get(... True)`
+  "FBT003",
+  # Ignore checks for possible passwords
+  "S105", "S106", "S107",
+  # Ignore complexity
+  "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
+  # Ignore some unsecure rules:
+  "S301",
+  # Ignore relative imports
+  "TID252"
+]
+unfixable = [
+  # Don't touch unused imports
+  "F401",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["mmdc"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use magic values, assertions, and relative imports
+"tests/**/*" = ["PLR2004", "S101", "TID252", "E501", "F401"]
+"__init__.py" = ["F401"]
+
+[tool.coverage.run]
+source_pkgs = ["mmdc"]
+branch = true
+parallel = true
+omit = [
+  "mmdc/__about__.py",
+]
+
+
+[tool.coverage.paths]
+mmdc = ["mmdc"]
+tests = ["tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+  "__version__ = "
+]
+
+
+[tool.coverage.html]
+directory = "coverage_html_report"
