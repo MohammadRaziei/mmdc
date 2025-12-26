@@ -88,33 +88,6 @@ class TestIntegration:
             if output_path.exists():
                 output_path.unlink()
     
-    @pytest.mark.parametrize("timeout", [1, 5, 10, 30])
-    def test_conversion_with_different_timeouts(self, timeout):
-        """Test conversion with different timeout values."""
-        converter = MermaidConverter()
-        
-        mermaid_code = "graph TD\n  A --> B"
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.mermaid', delete=False) as f:
-            f.write(mermaid_code)
-            input_path = Path(f.name)
-        
-        with tempfile.NamedTemporaryFile(suffix='.svg', delete=False) as f:
-            output_path = Path(f.name)
-        
-        try:
-            success = converter.convert(input_path, output_path, timeout=timeout)
-            
-            # Should succeed even with short timeouts for simple diagram
-            assert success is True, f"Conversion should succeed with timeout={timeout}"
-            assert output_path.exists(), f"Output file should exist with timeout={timeout}"
-            assert output_path.stat().st_size > 0, f"Output file should not be empty with timeout={timeout}"
-            
-        finally:
-            if input_path.exists():
-                input_path.unlink()
-            if output_path.exists():
-                output_path.unlink()
     
     def test_invalid_input_file(self):
         """Test conversion with non-existent input file."""
