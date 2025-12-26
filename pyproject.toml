@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling", "hatch-requirements-txt"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
 name = "mmdc"
-dynamic = ["version", "dependencies"]
+dynamic = ["version"]
 description = ""
 readme = "README.md"
 requires-python = ">=3.7"
@@ -22,15 +22,15 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-
+dependencies = [
+    "phasma",
+    "cairosvg",
+]
 
 [project.optional-dependencies]
 test = [
   "pytest-cov"
 ]
-
-[tool.hatch.metadata.hooks.requirements_txt]
-files = ["requirements.txt"]
 
 [project.urls]
 Source = "https://github.com/mohammadraziei/mmdc"
