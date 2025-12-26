@@ -22,7 +22,7 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "phasma>=0.4.0",
+    "phasma",
 ]
 
 [project.optional-dependencies]
