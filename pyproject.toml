@@ -23,7 +23,12 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 
-#dependencies = []
+
+[project.optional-dependencies]
+test = [
+  "pytest-cov"
+]
+
 [tool.hatch.metadata.hooks.requirements_txt]
 files = ["requirements.txt"]
 
