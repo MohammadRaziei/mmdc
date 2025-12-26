@@ -14,19 +14,12 @@
     });
 
     window.renderMermaidSync = function (code) {
-        var svg;
-        var done = false;
-        mermaid.render("graphDiv", code, function(svgResult) {
-            document.getElementById("container").innerHTML = svgResult;
-            svg = svgResult;
-            done = true;
+        return new Promise(function(resolve, reject) {
+            mermaid.render("graphDiv", code, function(svgResult) {
+                document.getElementById("container").innerHTML = svgResult;
+                resolve(svgResult);
+            });
         });
-        // Wait for render to complete (simple polling)
-        var start = Date.now();
-        while (!done && Date.now() - start < 5000) {
-            // busy wait
-        }
-        return svg;
     };
 </script>
 </body>

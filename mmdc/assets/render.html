@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="./mermaid.min.js"></script>
+</head>
+<body>
+<div id="container"></div>
+
+<script>
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: "default"
+    });
+
+    window.renderMermaidSync = function (code) {
+        var svg;
+        var done = false;
+        mermaid.render("graphDiv", code, function(svgResult) {
+            document.getElementById("container").innerHTML = svgResult;
+            svg = svgResult;
+            done = true;
+        });
+        // Wait for render to complete (simple polling)
+        var start = Date.now();
+        while (!done && Date.now() - start < 5000) {
+            // busy wait
+        }
+        return svg;
+    };
+</script>
+</body>
+</html>
