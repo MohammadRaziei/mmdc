@@ -3,9 +3,6 @@
 Mermaid Diagram Converter using PhantomJS (phasma) with runtime template replacement.
 """
 
-import sys
-import tempfile
-import os
 import logging
 from pathlib import Path
 
