@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mmdc"
 dynamic = ["version"]
-description = ""
+description = "Python-native Mermaid diagram converter – no browser, Node.js, or npm required. Renders diagrams to SVG using PhantomJS via phasma, perfect for documentation automation and CI/CD pipelines."
 readme = "README.md"
 requires-python = ">=3.7"
 license = "MIT"
