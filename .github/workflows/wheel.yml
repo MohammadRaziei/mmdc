@@ -28,7 +28,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.x"
+          python-version: "3.11"
 
       - name: Upgrade pip & install build tools
         run: |
@@ -47,7 +47,7 @@ jobs:
           path: dist/*.whl
           overwrite: false
 
-          
+
   test:
     needs: [build_wheels]
     strategy:
@@ -62,7 +62,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.x"
+          python-version: "3.11"
 
       - name: Download built wheel
         uses: actions/download-artifact@v4
