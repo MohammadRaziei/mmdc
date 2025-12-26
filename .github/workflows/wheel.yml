@@ -63,10 +63,20 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Install dependencies
+      - name: Download built wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Install wheel
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[test]"
+          pip install dist/*.whl
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest
 
       - name: Run tests
         run: |
