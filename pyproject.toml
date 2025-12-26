@@ -7,6 +7,7 @@ name = "mmdc"
 dynamic = ["version"]
 description = "Python-native Mermaid diagram converter – no browser, Node.js, or npm required. Renders diagrams to SVG using PhantomJS via phasma, perfect for documentation automation and CI/CD pipelines."
 readme = "README.md"
+requires-python = ">=3.4"
 license = "MIT"
 keywords = ["mermaid", "diagram", "svg", "phasma", "phantomjs", "documentation", "automation", "ci-cd", "python"]
 authors = [
@@ -22,7 +23,7 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "phasma",
+    "phasma>=0.4.0",
 ]
 
 [project.optional-dependencies]
