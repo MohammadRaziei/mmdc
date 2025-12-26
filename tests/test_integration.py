@@ -5,6 +5,7 @@ These tests actually run the conversion process.
 """
 import pytest
 import tempfile
+
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -24,17 +25,39 @@ def is_valid_svg(content: str) -> bool:
 class TestIntegration:
     """Integration tests that actually convert Mermaid to SVG."""
     
-    def test_basic_conversion(self):
-        """Test converting a basic Mermaid diagram."""
-        converter = MermaidConverter()
-        
-        # Create a simple Mermaid diagram
-        mermaid_code = """graph TD
+    @pytest.mark.parametrize("mermaid_code,description", [
+        ("""graph TD
     A[Start] --> B{Decision}
     B -->|Yes| C[Action 1]
     B -->|No| D[Action 2]
     C --> E[End]
-    D --> E"""
+    D --> E""", "basic flowchart"),
+        ("""sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice->>Bob: Hello Bob, how are you?
+    Bob-->>Alice: I'm good thanks!""", "sequence diagram"),
+        ("""graph LR
+    A[Square] --> B(Round)
+    B --> C{Decision}
+    C --> D[Result]""", "left-right flowchart"),
+        ("""pie title Pets adopted by volunteers
+    "Dogs" : 386
+    "Cats" : 85
+    "Rats" : 15""", "pie chart"),
+        ("""gantt
+    title A Gantt Diagram
+    dateFormat  YYYY-MM-DD
+    section Section
+    A task           :a1, 2014-01-01, 30d
+    Another task     :after a1, 20d
+    section Another
+    Task in sec      :2014-01-12, 12d
+    another task     :24d""", "gantt chart"),
+    ])
+    def test_mermaid_conversion(self, mermaid_code, description):
+        """Test converting various Mermaid diagrams to SVG."""
+        converter = MermaidConverter()
         
         with tempfile.NamedTemporaryFile(mode='w', suffix='.mermaid', delete=False) as f:
             f.write(mermaid_code)
@@ -46,19 +69,17 @@ class TestIntegration:
         try:
             success = converter.convert(input_path, output_path, timeout=30)
             
-            assert success is True, "Conversion should succeed"
-            assert output_path.exists(), "Output file should exist"
-            assert output_path.stat().st_size > 0, "Output file should not be empty"
+            assert success is True, f"Conversion should succeed for {description}"
+            assert output_path.exists(), f"Output file should exist for {description}"
+            assert output_path.stat().st_size > 0, f"Output file should not be empty for {description}"
             
             # Check that it's valid SVG
             with open(output_path, 'r') as svg_file:
                 svg_content = svg_file.read()
             
-            assert '<svg' in svg_content, "Output should contain SVG tag"
-            assert 'graph TD' not in svg_content, "Output should not contain Mermaid code"
-            
+            assert '<svg' in svg_content, f"Output should contain SVG tag for {description}"
             # Basic validation
-            assert is_valid_svg(svg_content), "Output should be valid SVG"
+            assert is_valid_svg(svg_content), f"Output should be valid SVG for {description}"
             
         finally:
             # Cleanup
@@ -67,15 +88,12 @@ class TestIntegration:
             if output_path.exists():
                 output_path.unlink()
     
-    def test_sequence_diagram(self):
-        """Test converting a sequence diagram."""
+    @pytest.mark.parametrize("timeout", [1, 5, 10, 30])
+    def test_conversion_with_different_timeouts(self, timeout):
+        """Test conversion with different timeout values."""
         converter = MermaidConverter()
         
-        mermaid_code = """sequenceDiagram
-    participant Alice
-    participant Bob
-    Alice->>Bob: Hello Bob, how are you?
-    Bob-->>Alice: I'm good thanks!"""
+        mermaid_code = "graph TD\n  A --> B"
         
         with tempfile.NamedTemporaryFile(mode='w', suffix='.mermaid', delete=False) as f:
             f.write(mermaid_code)
@@ -85,16 +103,12 @@ class TestIntegration:
             output_path = Path(f.name)
         
         try:
-            success = converter.convert(input_path, output_path, timeout=30)
+            success = converter.convert(input_path, output_path, timeout=timeout)
             
-            assert success is True, "Conversion should succeed"
-            assert output_path.exists(), "Output file should exist"
-            assert output_path.stat().st_size > 0, "Output file should not be empty"
-            
-            with open(output_path, 'r') as svg_file:
-                svg_content = svg_file.read()
-            
-            assert '<svg' in svg_content, "Output should contain SVG tag"
+            # Should succeed even with short timeouts for simple diagram
+            assert success is True, f"Conversion should succeed with timeout={timeout}"
+            assert output_path.exists(), f"Output file should exist with timeout={timeout}"
+            assert output_path.stat().st_size > 0, f"Output file should not be empty with timeout={timeout}"
             
         finally:
             if input_path.exists():
@@ -131,6 +145,11 @@ class TestIntegration:
             # We just check that it doesn't crash
             if success:
                 assert output_path.exists(), "Output file should exist"
+                # If it produces output, it should be valid SVG
+                with open(output_path, 'r') as svg_file:
+                    svg_content = svg_file.read()
+                if svg_content.strip():
+                    assert '<svg' in svg_content, "Output should contain SVG tag"
             
         finally:
             if input_path.exists():
@@ -138,25 +157,30 @@ class TestIntegration:
             if output_path.exists():
                 output_path.unlink()
     
-    def test_timeout(self):
-        """Test conversion with very short timeout (should still work for simple diagram)."""
+    @pytest.mark.parametrize("special_chars", [
+        "graph TD\n  A[Test & < > \" '] --> B",
+        "graph TD\n  A[Line1\nLine2] --> B",
+        "graph TD\n  A[Special chars: © ® €] --> B",
+    ])
+    def test_mermaid_with_special_characters(self, special_chars):
+        """Test converting Mermaid with special characters."""
         converter = MermaidConverter()
         
-        mermaid_code = "graph TD\n  A --> B"
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.mermaid', delete=False) as f:
-            f.write(mermaid_code)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.mermaid', delete=False, encoding='utf-8') as f:
+            f.write(special_chars)
             input_path = Path(f.name)
         
         with tempfile.NamedTemporaryFile(suffix='.svg', delete=False) as f:
             output_path = Path(f.name)
         
         try:
-            # Very short timeout, but should still work for simple diagram
-            success = converter.convert(input_path, output_path, timeout=5)
+            success = converter.convert(input_path, output_path, timeout=30)
             
-            assert success is True, "Conversion should succeed with short timeout"
-            assert output_path.exists(), "Output file should exist"
+            # Conversion might succeed or fail depending on PhantomJS handling
+            # We just check it doesn't crash
+            if success:
+                assert output_path.exists(), "Output file should exist"
+                assert output_path.stat().st_size > 0, "Output file should not be empty"
             
         finally:
             if input_path.exists():
