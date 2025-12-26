@@ -24,7 +24,6 @@ classifiers = [
 ]
 dependencies = [
     "phasma>=0.4.0",
-    "cairosvg",
 ]
 
 [project.optional-dependencies]
