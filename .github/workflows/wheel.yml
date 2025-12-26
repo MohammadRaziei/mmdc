@@ -74,11 +74,8 @@ jobs:
       - name: Install wheel
         run: |
           ls dist
+          pip install pip pytest
           pip install --no-index --upgrade --find-links ./dist/ mmdc
-
-      - name: Install test dependencies
-        run: |
-          pip install pytest
 
       - name: Run tests
         run: |
