@@ -9,7 +9,7 @@ description = "Python-native Mermaid diagram converter – no browser, Node.js, 
 readme = "README.md"
 requires-python = ">=3.7"
 license = "MIT"
-keywords = []
+keywords = ["mermaid", "diagram", "svg", "phasma", "phantomjs", "documentation", "automation", "ci-cd", "python"]
 authors = [
   { name = "Mohammad Raziei", email = "mohammadraziei1375@gmail.com" },
 ]
