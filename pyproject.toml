@@ -23,7 +23,8 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "phasma>=0.4.0",
+    "phasma>=0.4.0", 
+    "cairosvg"
 ]
 
 [project.optional-dependencies]
