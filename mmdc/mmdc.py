@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from phasma.driver import Driver
-import cairosvg
+# import cairosvg
 
 
 class MermaidConverter:
@@ -95,19 +95,22 @@ class MermaidConverter:
         Raises:
             RuntimeError: If conversion fails
         """
+
+        raise NotImplementedError
+
         # First get SVG
-        svg = self.to_svg(input_file).encode()
+        # svg = self.to_svg(input_file).encode()
         
-        # Convert SVG to PNG
-        png_bytes = cairosvg.svg2png(bytestring=svg, output_width=width, output_height=height, scale=scale)
+        # # Convert SVG to PNG
+        # png_bytes = cairosvg.svg2png(bytestring=svg, output_width=width, output_height=height, scale=scale)
         
-        if output_file:
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            output_file.write_bytes(png_bytes)
-            self.logger.debug(f"PNG written to {output_file}")
-            return None
-        else:
-            return png_bytes
+        # if output_file:
+        #     output_file.parent.mkdir(parents=True, exist_ok=True)
+        #     output_file.write_bytes(png_bytes)
+        #     self.logger.debug(f"PNG written to {output_file}")
+        #     return None
+        # else:
+        #     return png_bytes
     
     def to_pdf(self, input_file: Path, output_file: Optional[Path] = None,
                scale: float = 1.0, width: Optional[int] = None,
@@ -128,26 +131,21 @@ class MermaidConverter:
         Raises:
             RuntimeError: If conversion fails
         """
+        raise NotImplementedError
+
         # First get SVG
-        svg = self.to_svg(input_file)
+        # svg = self.to_svg(input_file).encode()
         
-        # Convert SVG to PDF
-        if width is not None and height is not None:
-            pdf_bytes = cairosvg.svg2pdf(bytestring=svg.encode(), output_width=width, output_height=height)
-        elif width is not None:
-            pdf_bytes = cairosvg.svg2pdf(bytestring=svg.encode(), output_width=width)
-        elif height is not None:
-            pdf_bytes = cairosvg.svg2pdf(bytestring=svg.encode(), output_height=height)
-        else:
-            pdf_bytes = cairosvg.svg2pdf(bytestring=svg.encode(), scale=scale)
+        # # Convert SVG to PDF
+        # pdf_bytes = cairosvg.svg2pdf(bytestring=svg, output_width=width, output_height=height, scale=scale)
         
-        if output_file:
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            output_file.write_bytes(pdf_bytes)
-            self.logger.debug(f"PDF written to {output_file}")
-            return None
-        else:
-            return pdf_bytes
+        # if output_file:
+        #     output_file.parent.mkdir(parents=True, exist_ok=True)
+        #     output_file.write_bytes(pdf_bytes)
+        #     self.logger.debug(f"PDF written to {output_file}")
+        #     return None
+        # else:
+        #     return pdf_bytes
     
     def convert(self, input_file: Path, output_file: Path) -> bool:
         """
