@@ -25,9 +25,9 @@ def main():
         ]
     )
     
-    converter = MermaidConverter()
+    converter = MermaidConverter(timeout=args.timeout)
     
-    success = converter.convert(args.input, args.output, args.timeout)
+    success = converter.convert(args.input, args.output)
     if success:
         logging.info(f"Successfully converted to {args.output}")
         sys.exit(0)
