@@ -6,7 +6,7 @@ Supports SVG, PNG, PDF output.
 
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union, TextIO
 
 from phasma.driver import Driver
 # import cairosvg
@@ -23,12 +23,12 @@ class MermaidConverter:
         
         self.driver = Driver()
     
-    def to_svg(self, input_file: Path, output_file: Optional[Path] = None) -> Optional[str]:
+    def to_svg(self, input: Union[str, TextIO], output_file: Optional[Path] = None) -> Optional[str]:
         """
-        Convert Mermaid diagram file to SVG string or file.
+        Convert Mermaid diagram (text or file-like object) to SVG string or file.
         
         Args:
-            input_file: Path to Mermaid file
+            input: Mermaid code as string, or a file-like object with .read() method
             output_file: Optional path to save SVG file. If None, returns string.
             
         Returns:
@@ -37,16 +37,22 @@ class MermaidConverter:
         Raises:
             RuntimeError: If conversion fails
         """
-        # Ensure absolute path
-        input_file = input_file.absolute()
+        # Determine if input is a string or file-like object
+        if isinstance(input, str):
+            # String
+            mermaid_code = input
+        else:
+            # File-like object
+            mermaid_code = input.read()
         
-        # Run phantomjs via phasma driver, output to stdout ("-")
+        # Run phantomjs via phasma driver, read from stdin ("-") and output to stdout ("-")
         result = self.driver.exec(
-            [str(self.render_js), str(input_file), "-"],
+            [str(self.render_js), "-", "-"],
             capture_output=True,
             timeout=self.timeout,
             ssl=False,
-            cwd=self.assets_dir
+            cwd=self.assets_dir,
+            input=mermaid_code.encode()
         )
 
         stdout = result.stdout.decode() if result.stdout else ""
@@ -159,18 +165,21 @@ class MermaidConverter:
         output_ext = output_file.suffix.lower()
         
         try:
+            # Read Mermaid code from file
+            mermaid_code = input_file.read_text()
+            
             if output_ext == ".svg":
-                svg_content = self.to_svg(input_file)
+                svg_content = self.to_svg(mermaid_code)
                 output_file.parent.mkdir(parents=True, exist_ok=True)
                 output_file.write_text(svg_content)
                 self.logger.debug(f"SVG written to {output_file}")
                 return True
             elif output_ext == ".png":
-                self.to_png(input_file, output_file=output_file)
+                self.to_png(mermaid_code, output_file=output_file)
                 self.logger.debug(f"PNG written to {output_file}")
                 return True
             elif output_ext == ".pdf":
-                self.to_pdf(input_file, output_file=output_file)
+                self.to_pdf(mermaid_code, output_file=output_file)
                 self.logger.debug(f"PDF written to {output_file}")
                 return True
             else:

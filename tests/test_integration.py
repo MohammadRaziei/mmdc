@@ -165,30 +165,22 @@ class TestIntegration:
         """Test the to_svg method directly."""
         converter = MermaidConverter()
         
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.mermaid', delete=False) as f:
-            f.write("graph TD\n  A --> B")
-            input_path = Path(f.name)
+        # Direct string input
+        mermaid_code = "graph TD\n  A --> B"
+        svg = converter.to_svg(mermaid_code)
         
-        try:
-            svg = converter.to_svg(input_path)
-            
-            assert svg is not None, "SVG should not be None"
-            assert len(svg) > 0, "SVG should not be empty"
-            assert '<svg' in svg, "SVG should contain SVG tag"
-            assert is_valid_svg(svg), "SVG should be valid"
-            
-        finally:
-            if input_path.exists():
-                input_path.unlink()
+        assert svg is not None, "SVG should not be None"
+        assert len(svg) > 0, "SVG should not be empty"
+        assert '<svg' in svg, "SVG should contain SVG tag"
+        assert is_valid_svg(svg), "SVG should be valid"
     
     def test_to_svg_with_invalid_file(self):
-        """Test to_svg with non-existent file."""
+        """Test to_svg with invalid input (empty string)."""
         converter = MermaidConverter(timeout=10)
         
-        input_path = Path("/non/existent/file.mermaid")
-        
+        # Empty string should raise RuntimeError
         with pytest.raises(RuntimeError):
-            converter.to_svg(input_path)
+            converter.to_svg("")
     
     @pytest.mark.skip
     def test_to_png_function(self):
