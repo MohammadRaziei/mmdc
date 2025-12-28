@@ -82,18 +82,20 @@ class MermaidConverter:
         else:
             return stdout
     
-    def to_png(self, input_file: Path, output_file: Optional[Path] = None, 
-               scale: float = 1.0, width: Optional[int] = None, 
-               height: Optional[int] = None) -> Optional[bytes]:
+    def to_png(self, input: Union[str, TextIO], output_file: Optional[Path] = None,
+               scale: float = 1.0, width: Optional[int] = None,
+               height: Optional[int] = None, resolution: int = 96,
+               background: Optional[str] = None) -> Optional[bytes]:
         """
-        Convert Mermaid diagram file to PNG bytes or file.
+        Convert Mermaid diagram (text or file-like) to PNG bytes or file using PhantomJS.
         
         Args:
-            input_file: Path to Mermaid file
+            input: Mermaid code as string, or a file-like object with .read() method
             output_file: Optional path to save PNG file. If None, returns bytes.
-            scale: Scale factor for output (default 1.0)
+            scale: Scale factor for output (default 1.0) - overridden by width/height
             width: Output width in pixels (overrides scale)
             height: Output height in pixels (overrides scale)
+            resolution: DPI resolution (default 96)
             
         Returns:
             PNG bytes if output_file is None, otherwise None
@@ -101,22 +103,83 @@ class MermaidConverter:
         Raises:
             RuntimeError: If conversion fails
         """
-
-        raise NotImplementedError
-
-        # First get SVG
-        # svg = self.to_svg(input_file).encode()
+        import tempfile
         
-        # # Convert SVG to PNG
-        # png_bytes = cairosvg.svg2png(bytestring=svg, output_width=width, output_height=height, scale=scale)
+        # Determine if input is a string or file-like object
+        if isinstance(input, str):
+            mermaid_code = input
+        else:
+            mermaid_code = input.read()
         
-        # if output_file:
-        #     output_file.parent.mkdir(parents=True, exist_ok=True)
-        #     output_file.write_bytes(png_bytes)
-        #     self.logger.debug(f"PNG written to {output_file}")
-        #     return None
-        # else:
-        #     return png_bytes
+        # If output_file is None, use a temporary file
+        temp_file = None
+        if output_file is None:
+            temp_file = Path(tempfile.mktemp(suffix='.png'))
+            output_target = temp_file
+        else:
+            output_target = output_file
+        
+        # Build command arguments for render.js
+        args = [str(self.render_js), "-", str(output_target)]
+        
+        # Add width/height/resolution if specified
+        # Send 0 for unspecified dimensions (render.js will treat 0 as null)
+        if width is not None:
+            args.append(str(width))
+        else:
+            args.append("0")
+        
+        if height is not None:
+            args.append(str(height))
+        else:
+            args.append("0")
+        
+        if resolution != 96:
+            args.append(str(resolution))
+        else:
+            args.append("96")
+        
+        # Add background if specified
+        if background is not None:
+            args.append(background)
+        else:
+            args.append("transparent")  # empty string for no background
+        
+        # Run phantomjs via phasma driver
+        result = self.driver.exec(
+            args,
+            capture_output=True,
+            timeout=self.timeout,
+            ssl=False,
+            cwd=self.assets_dir,
+            input=mermaid_code.encode()
+        )
+
+        stdout = result.stdout if result.stdout else b""
+        stderr = result.stderr.decode() if result.stderr else ""
+        
+        self.logger.debug(f"stdout length: {len(stdout)} bytes")
+        self.logger.debug(f"stderr: {stderr}")
+        
+        # Check for errors
+        if "ERROR:" in stderr or "ReferenceError" in stderr:
+            raise RuntimeError(f"PhantomJS error: {stderr}")
+        
+        if result.returncode != 0:
+            error = stderr if stderr else "Unknown error"
+            raise RuntimeError(f"PhantomJS exited with code {result.returncode}: {error}")
+        
+        # If we used a temp file, read it and delete
+        if temp_file:
+            if temp_file.exists():
+                png_bytes = temp_file.read_bytes()
+                temp_file.unlink()
+                return png_bytes
+            else:
+                raise RuntimeError("PNG file was not created")
+        else:
+            # output_file was provided, no bytes to return
+            return None
     
     def to_pdf(self, input_file: Path, output_file: Optional[Path] = None,
                scale: float = 1.0, width: Optional[int] = None,
