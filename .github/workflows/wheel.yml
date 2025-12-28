@@ -34,6 +34,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip build
 
+      - name: Commit version update
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          # Set version using hatch
+          echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_ENV
+          hatch version "$TAG_VERSION"
+          # Commit Tags
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add mmdc/__about__.py
+          NEW_VERSION=$(grep -oP '__version__ = "\K[^"]+' mmdc/__about__.py)
+          git commit -m "Bump version to $NEW_VERSION"
+          git push
+
       - name: Build wheel (download driver)
         run: |
           python -m build 
@@ -84,61 +98,29 @@ jobs:
     name: Release Assets and Upload to PyPI
     needs: [test]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Hatch
-        run: pip install hatch
-
-      # Determine release type and set version
-      - name: Determine release type and version
+      # Determine release type
+      - name: Determine release type
         id: release_type
         run: |
           if [[ "${{ github.ref }}" =~ ^refs/tags/v.*$ ]]; then
             echo "RELEASE_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
             echo "IS_TAG=true" >> $GITHUB_ENV
-            # Extract version from tag (remove 'v' prefix)
-            TAG_VERSION="${GITHUB_REF#refs/tags/v}"
-            echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_ENV
-            # Set version using hatch
-            hatch version "$TAG_VERSION"
           else
             echo "RELEASE_NAME=__beta__" >> $GITHUB_ENV
             echo "IS_TAG=false" >> $GITHUB_ENV
-            # For non-tag builds, bump patch version
-            hatch version patch
           fi
-        shell: bash
-
-      - name: Commit version update (if not tag)
-        if: ${{ env.IS_TAG == 'false' }}
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add mmdc/__about__.py
-          NEW_VERSION=$(grep -oP '__version__ = "\K[^"]+' mmdc/__about__.py)
-          git commit -m "Bump version to $NEW_VERSION"
-          git push
-
+        shell: bash # Use bash for all platforms
+        
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
+  
       - name: List dist directory
-        run: tree --du -shaC .
+        run: tree --du -shaC . # Ensure the directory is not empty
 
       - name: Create or update release
         id: create_release
