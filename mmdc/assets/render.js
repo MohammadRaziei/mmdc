@@ -32,7 +32,7 @@ for (var i = 1; i < system.args.length; i++) {
         background = system.args[i];
     } else if (arg === '--help') {
         system.stderr.write("Usage: phantomjs render.js input.mermaid output [--css CSS] [--width W] [--height H] [--resolution R] [--background COLOR]\n");
-        system.stderr.write("       output: 'svg' or 'png' for stdout, or filename with .svg/.png extension\n");
+        system.stderr.write("       output: 'svg', 'png', or 'pdf' for stdout, or filename with .svg/.png/.pdf extension\n");
         phantom.exit(0);
     } else {
         // positional arguments: input and output
@@ -109,11 +109,11 @@ page.open('render.html', function (status) {
 
     // Determine output type from output string
     var type;
-    if (output === 'svg' || output === 'png') {
+    if (output === 'svg' || output === 'png' || output === 'pdf') {
         type = output;
     } else {
         var outputExt = output.split('.').pop().toLowerCase();
-        if (outputExt === 'svg' || outputExt === 'png') {
+        if (outputExt === 'svg' || outputExt === 'png' || outputExt === 'pdf') {
             type = outputExt;
         } else {
             type = 'svg'; // default
@@ -121,7 +121,7 @@ page.open('render.html', function (status) {
     }
     
     // Determine if we should write to stdout
-    var writeToStdout = (output === 'svg' || output === 'png');
+    var writeToStdout = (output === 'svg' || output === 'png' || output === 'pdf');
     
     if (type === 'svg') {
         if (writeToStdout) {
@@ -131,85 +131,95 @@ page.open('render.html', function (status) {
             fs.write(output, svg, 'w');
         }
         phantom.exit(0);
-    } else if (type === 'png') {
-        // Inject SVG into page for rendering
-        page.evaluate(function(svgContent, bgColor) {
-            var div = document.createElement('div');
-            div.innerHTML = svgContent;
-            document.body.appendChild(div);
-            // Remove any margin/padding
-            document.body.style.margin = '0';
-            document.body.style.padding = '0';
-            div.style.margin = '0';
-            div.style.padding = '0';
-            // Apply background color if specified
-            if (bgColor && bgColor !== 'transparent' && bgColor !== 'none') {
-                document.body.style.backgroundColor = bgColor;
-            }
-        }, svg, background);
-        
-        // Wait a bit for rendering
-        setTimeout(function() {
-            // Get SVG dimensions
-            var dimensions = page.evaluate(function() {
-                var svgElem = document.querySelector('svg');
-                if (!svgElem) return null;
-                var bbox = svgElem.getBBox();
-                return {
-                    width: Math.ceil(bbox.width),
-                    height: Math.ceil(bbox.height),
-                    x: Math.floor(bbox.x),
-                    y: Math.floor(bbox.y)
+    } else if (type === 'png' || type === 'pdf') {
+        // Helper function to render to PNG or PDF
+        function renderToRaster(format) {
+            // Inject SVG into page for rendering
+            page.evaluate(function(svgContent, bgColor) {
+                var div = document.createElement('div');
+                div.innerHTML = svgContent;
+                document.body.appendChild(div);
+                // Remove any margin/padding
+                document.body.style.margin = '0';
+                document.body.style.padding = '0';
+                div.style.margin = '0';
+                div.style.padding = '0';
+                // Apply background color if specified
+                if (bgColor && bgColor !== 'transparent' && bgColor !== 'none') {
+                    document.body.style.backgroundColor = bgColor;
+                }
+            }, svg, background);
+            
+            // Wait a bit for rendering
+            setTimeout(function() {
+                // Get SVG dimensions
+                var dimensions = page.evaluate(function() {
+                    var svgElem = document.querySelector('svg');
+                    if (!svgElem) return null;
+                    var bbox = svgElem.getBBox();
+                    return {
+                        width: Math.ceil(bbox.width),
+                        height: Math.ceil(bbox.height),
+                        x: Math.floor(bbox.x),
+                        y: Math.floor(bbox.y)
+                    };
+                });
+                
+                if (!dimensions) {
+                    system.stderr.write("ERROR: Could not get SVG dimensions\n");
+                    phantom.exit(1);
+                }
+                
+                // Apply width/height if provided
+                var finalWidth = (width !== null) ? width : dimensions.width;
+                var finalHeight = (height !== null) ? height : dimensions.height;
+                
+                // Calculate scale if width/height provided but only one dimension
+                if (width !== null && height === null) {
+                    finalHeight = Math.round(dimensions.height * (width / dimensions.width));
+                } else if (height !== null && width === null) {
+                    finalWidth = Math.round(dimensions.width * (height / dimensions.height));
+                }
+                
+                // Apply resolution (DPI) scaling
+                var scale = resolution / 96;
+                finalWidth = Math.round(finalWidth * scale);
+                finalHeight = Math.round(finalHeight * scale);
+                
+                // Set viewport and clipRect
+                page.viewportSize = {
+                    width: finalWidth,
+                    height: finalHeight
                 };
-            });
-            
-            if (!dimensions) {
-                system.stderr.write("ERROR: Could not get SVG dimensions\n");
-                phantom.exit(1);
-            }
-            
-            // Apply width/height if provided
-            var finalWidth = (width !== null) ? width : dimensions.width;
-            var finalHeight = (height !== null) ? height : dimensions.height;
-            
-            // Calculate scale if width/height provided but only one dimension
-            if (width !== null && height === null) {
-                finalHeight = Math.round(dimensions.height * (width / dimensions.width));
-            } else if (height !== null && width === null) {
-                finalWidth = Math.round(dimensions.width * (height / dimensions.height));
-            }
-            
-            // Apply resolution (DPI) scaling
-            var scale = resolution / 96;
-            finalWidth = Math.round(finalWidth * scale);
-            finalHeight = Math.round(finalHeight * scale);
-            
-            // Set viewport and clipRect
-            page.viewportSize = {
-                width: finalWidth,
-                height: finalHeight
-            };
-            page.clipRect = {
-                top: 0,
-                left: 0,
-                width: finalWidth,
-                height: finalHeight
-            };
-            
-            // Set zoom factor for resolution
-            page.zoomFactor = scale;
-            
-            if (writeToStdout) {
-                // PNG output to stdout is not supported
-                system.stderr.write("ERROR: PNG output to stdout not supported. Please specify a filename with .png extension.\n");
-                phantom.exit(1);
-            } else {
-                page.render(output);
-            }
-            phantom.exit(0);
-        }, 100);
+                page.clipRect = {
+                    top: 0,
+                    left: 0,
+                    width: finalWidth,
+                    height: finalHeight
+                };
+                
+                // Set zoom factor for resolution
+                page.zoomFactor = scale;
+                
+                if (writeToStdout) {
+                    // Raster output to stdout is not supported
+                    system.stderr.write("ERROR: " + format.toUpperCase() + " output to stdout not supported. Please specify a filename with ." + format + " extension.\n");
+                    phantom.exit(1);
+                } else {
+                    if (format === 'pdf') {
+                        page.render(output, { format: 'pdf' });
+                    } else {
+                        page.render(output);
+                    }
+                }
+                phantom.exit(0);
+            }, 100);
+        }
+        
+        // Call helper with appropriate format
+        renderToRaster(type);
     } else {
-        system.stderr.write("ERROR: Unsupported output type. Use 'svg' or 'png'\n");
+        system.stderr.write("ERROR: Unsupported output type. Use 'svg', 'png', or 'pdf'\n");
         phantom.exit(1);
     }
 });
