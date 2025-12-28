@@ -89,26 +89,25 @@ class MermaidConverter:
         else:
             return stdout
     
-    def to_png(self, input: Union[str, TextIO], output_file: Optional[Path] = None,
-               scale: float = 1.0, width: Optional[int] = None,
-               height: Optional[int] = None, resolution: int = 96,
-               background: Optional[str] = None, css: Optional[str] = None) -> Optional[bytes]:
+    def _render_to_file(self, input: Union[str, TextIO], output_file: Optional[Path], 
+                        file_extension: str, width: Optional[int] = None,
+                        height: Optional[int] = None, resolution: int = 96,
+                        background: Optional[str] = None, css: Optional[str] = None) -> Optional[bytes]:
         """
-        Convert Mermaid diagram (text or file-like) to PNG bytes or file using PhantomJS.
+        Internal helper to render Mermaid to a file (PNG or PDF).
         
         Args:
-            input: Mermaid code as string, or a file-like object with .read() method
-            output_file: Optional path to save PNG file. If None, returns bytes.
-            scale: Scale factor for output (default 1.0) - overridden by width/height
-            width: Output width in pixels (overrides scale)
-            height: Output height in pixels (overrides scale)
-            resolution: DPI resolution (default 96)
+            input: Mermaid code as string or file-like object
+            output_file: Optional path to save file. If None, uses temp file.
+            file_extension: '.png' or '.pdf'
+            width: Output width in pixels
+            height: Output height in pixels
+            resolution: DPI resolution
+            background: Background color
+            css: Custom CSS
             
         Returns:
-            PNG bytes if output_file is None, otherwise None
-            
-        Raises:
-            RuntimeError: If conversion fails
+            File bytes if output_file is None, otherwise None
         """
         import tempfile
         
@@ -121,7 +120,7 @@ class MermaidConverter:
         # If output_file is None, use a temporary file
         temp_file = None
         if output_file is None:
-            temp_file = Path(tempfile.mktemp(suffix='.png'))
+            temp_file = Path(tempfile.mktemp(suffix=file_extension))
             output_target = temp_file
         else:
             output_target = output_file
@@ -181,14 +180,47 @@ class MermaidConverter:
         # If we used a temp file, read it and delete
         if temp_file:
             if temp_file.exists():
-                png_bytes = temp_file.read_bytes()
+                file_bytes = temp_file.read_bytes()
                 temp_file.unlink()
-                return png_bytes
+                return file_bytes
             else:
-                raise RuntimeError("PNG file was not created")
+                raise RuntimeError(f"{file_extension.upper()} file was not created")
         else:
             # output_file was provided, no bytes to return
             return None
+    
+    def to_png(self, input: Union[str, TextIO], output_file: Optional[Path] = None,
+               scale: float = 1.0, width: Optional[int] = None,
+               height: Optional[int] = None, resolution: int = 96,
+               background: Optional[str] = None, css: Optional[str] = None) -> Optional[bytes]:
+        """
+        Convert Mermaid diagram (text or file-like) to PNG bytes or file using PhantomJS.
+        
+        Args:
+            input: Mermaid code as string, or a file-like object with .read() method
+            output_file: Optional path to save PNG file. If None, returns bytes.
+            scale: Scale factor for output (default 1.0) - overridden by width/height
+            width: Output width in pixels (overrides scale)
+            height: Output height in pixels (overrides scale)
+            resolution: DPI resolution (default 96)
+            
+        Returns:
+            PNG bytes if output_file is None, otherwise None
+            
+        Raises:
+            RuntimeError: If conversion fails
+        """
+        # Note: scale parameter is kept for backward compatibility but overridden by width/height
+        return self._render_to_file(
+            input=input,
+            output_file=output_file,
+            file_extension='.png',
+            width=width,
+            height=height,
+            resolution=resolution,
+            background=background,
+            css=css
+        )
     
     def to_pdf(self, input: Union[str, TextIO], output_file: Optional[Path] = None,
                scale: float = 1.0, width: Optional[int] = None,
