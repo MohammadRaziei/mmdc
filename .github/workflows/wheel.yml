@@ -32,7 +32,7 @@ jobs:
 
       - name: Upgrade pip & install build tools
         run: |
-          python -m pip install --upgrade pip build
+          python -m pip install --upgrade pip build hatch
 
       - name: Commit version update
         if: startsWith(github.ref, 'refs/tags/')
