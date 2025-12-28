@@ -5,16 +5,53 @@ var system = require('system');
 page.settings.webSecurityEnabled = false;
 page.settings.localToRemoteUrlAccessEnabled = true;
 
-if (system.args.length < 3) {
-    system.stderr.write("ERROR: Usage: phantomjs render.js input.mermaid output [width] [height] [resolution] [background]\n");
-    system.stderr.write("       output: 'svg' or 'png' for stdout, or filename with .svg/.png extension\n");
-    system.stderr.write("       width, height, resolution: optional for PNG output (use 0 for unspecified)\n");
-    system.stderr.write("       background: optional background color (e.g., '#FFFFFF' or 'white'), default transparent\n");
+// Parse command line arguments with optional flags
+var inputFile = null;
+var output = null;
+var css = null;
+var width = null;
+var height = null;
+var resolution = 96;
+var background = null;
+
+for (var i = 1; i < system.args.length; i++) {
+    var arg = system.args[i];
+    if (arg === '--css' && ++i < system.args.length) {
+        css = system.args[i];
+        // i already incremented
+    } else if (arg === '--width' && ++i < system.args.length) {
+        width = parseInt(system.args[i]);
+        if (isNaN(width)) width = null;
+    } else if (arg === '--height' && ++i < system.args.length) {
+        height = parseInt(system.args[i]);
+        if (isNaN(height)) height = null;
+    } else if (arg === '--resolution' && ++i < system.args.length) {
+        resolution = parseInt(system.args[i]);
+        if (isNaN(resolution)) resolution = 96;
+    } else if (arg === '--background' && ++i < system.args.length) {
+        background = system.args[i];
+    } else if (arg === '--help') {
+        system.stderr.write("Usage: phantomjs render.js input.mermaid output [--css CSS] [--width W] [--height H] [--resolution R] [--background COLOR]\n");
+        system.stderr.write("       output: 'svg' or 'png' for stdout, or filename with .svg/.png extension\n");
+        phantom.exit(0);
+    } else {
+        // positional arguments: input and output
+        if (inputFile === null) {
+            inputFile = arg;
+        } else if (output === null) {
+            output = arg;
+        } else {
+            system.stderr.write("ERROR: Unexpected argument: " + arg + "\n");
+            phantom.exit(1);
+        }
+    }
+}
+
+if (inputFile === null || output === null) {
+    system.stderr.write("ERROR: Missing required arguments. Usage: phantomjs render.js input.mermaid output [--css CSS] [--width W] [--height H] [--resolution R] [--background COLOR]\n");
     phantom.exit(1);
 }
 
-var inputFile = system.args[1];
-var output = system.args[2]; // can be 'svg', 'png', or filename
 // Helper to parse integer or null if 0/empty/NaN
 function parseOptionalInt(val) {
     if (val === undefined || val === null || val === '') return null;
@@ -23,10 +60,10 @@ function parseOptionalInt(val) {
     return num;
 }
 
-var width = system.args.length > 3 ? parseOptionalInt(system.args[3]) : null;
-var height = system.args.length > 4 ? parseOptionalInt(system.args[4]) : null;
-var resolution = system.args.length > 5 ? parseOptionalInt(system.args[5]) : 96; // DPI
-var background = system.args.length > 6 ? system.args[6] : null; // background color
+// Convert width/height to null if 0
+width = parseOptionalInt(width);
+height = parseOptionalInt(height);
+resolution = parseOptionalInt(resolution) || 96;
 
 var mermaidCode;
 if (inputFile === "-") {
@@ -49,6 +86,16 @@ page.open('render.html', function (status) {
     if (status !== 'success') {
         system.stderr.write("ERROR: Failed to load page\n");
         phantom.exit(1);
+    }
+
+    // Inject CSS if provided
+    if (css) {
+        page.evaluate(function(cssText) {
+            var style = document.createElement('style');
+            style.type = 'text/css';
+            style.appendChild(document.createTextNode(cssText));
+            document.head.appendChild(style);
+        }, css);
     }
 
     var svg = page.evaluate(function (code) {

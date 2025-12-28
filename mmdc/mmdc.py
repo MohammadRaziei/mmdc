@@ -23,7 +23,8 @@ class MermaidConverter:
         
         self.driver = Driver()
     
-    def to_svg(self, input: Union[str, TextIO], output_file: Optional[Path] = None) -> Optional[str]:
+    def to_svg(self, input: Union[str, TextIO], output_file: Optional[Path] = None,
+               css: Optional[str] = None) -> Optional[str]:
         """
         Convert Mermaid diagram (text or file-like object) to SVG string or file.
         
@@ -45,9 +46,15 @@ class MermaidConverter:
             # File-like object
             mermaid_code = input.read()
         
-        # Run phantomjs via phasma driver, read from stdin ("-") and output to stdout ("-")
+        # Build command arguments for render.js
+        args = [str(self.render_js), "-", "svg"]
+        if css is not None:
+            args.append("--css")
+            args.append(css)
+        
+        # Run phantomjs via phasma driver, read from stdin ("-") and output to stdout ("svg")
         result = self.driver.exec(
-            [str(self.render_js), "-", "-"],
+            args,
             capture_output=True,
             timeout=self.timeout,
             ssl=False,
@@ -85,7 +92,7 @@ class MermaidConverter:
     def to_png(self, input: Union[str, TextIO], output_file: Optional[Path] = None,
                scale: float = 1.0, width: Optional[int] = None,
                height: Optional[int] = None, resolution: int = 96,
-               background: Optional[str] = None) -> Optional[bytes]:
+               background: Optional[str] = None, css: Optional[str] = None) -> Optional[bytes]:
         """
         Convert Mermaid diagram (text or file-like) to PNG bytes or file using PhantomJS.
         
@@ -119,31 +126,33 @@ class MermaidConverter:
         else:
             output_target = output_file
         
-        # Build command arguments for render.js
+        # Build command arguments for render.js with named flags
         args = [str(self.render_js), "-", str(output_target)]
         
-        # Add width/height/resolution if specified
-        # Send 0 for unspecified dimensions (render.js will treat 0 as null)
+        # Add CSS if specified
+        if css is not None:
+            args.append("--css")
+            args.append(css)
+        
+        # Add width if specified
         if width is not None:
+            args.append("--width")
             args.append(str(width))
-        else:
-            args.append("0")
         
+        # Add height if specified
         if height is not None:
+            args.append("--height")
             args.append(str(height))
-        else:
-            args.append("0")
         
+        # Add resolution if not default
         if resolution != 96:
+            args.append("--resolution")
             args.append(str(resolution))
-        else:
-            args.append("96")
         
         # Add background if specified
         if background is not None:
+            args.append("--background")
             args.append(background)
-        else:
-            args.append("transparent")  # empty string for no background
         
         # Run phantomjs via phasma driver
         result = self.driver.exec(
