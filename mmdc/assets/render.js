@@ -136,18 +136,21 @@ page.open('render.html', function (status) {
         function renderToRaster(format) {
             // Inject SVG into page for rendering
             page.evaluate(function(svgContent, bgColor) {
-                var div = document.createElement('div');
-                div.innerHTML = svgContent;
-                document.body.appendChild(div);
+                // Clear any existing content
+                document.body.innerHTML = '';
                 // Remove any margin/padding
                 document.body.style.margin = '0';
                 document.body.style.padding = '0';
-                div.style.margin = '0';
-                div.style.padding = '0';
                 // Apply background color if specified
                 if (bgColor && bgColor !== 'transparent' && bgColor !== 'none') {
                     document.body.style.backgroundColor = bgColor;
                 }
+                // Create div for SVG
+                var div = document.createElement('div');
+                div.innerHTML = svgContent;
+                div.style.margin = '0';
+                div.style.padding = '0';
+                document.body.appendChild(div);
             }, svg, background);
             
             // Wait a bit for rendering
