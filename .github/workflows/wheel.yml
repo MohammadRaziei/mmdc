@@ -117,8 +117,8 @@ jobs:
           else
             echo "RELEASE_NAME=__beta__" >> $GITHUB_ENV
             echo "IS_TAG=false" >> $GITHUB_ENV
-            # For non-tag builds, use hatch version from git describe
-            hatch version
+            # For non-tag builds, bump patch version
+            hatch version patch
           fi
         shell: bash
 
@@ -128,7 +128,8 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add mmdc/__about__.py
-          git commit -m "Update version to $(grep -oP '__version__ = "\K[^"]+' mmdc/__about__.py)"
+          NEW_VERSION=$(grep -oP '__version__ = "\K[^"]+' mmdc/__about__.py)
+          git commit -m "Bump version to $NEW_VERSION"
           git push
 
       - uses: actions/download-artifact@v4
