@@ -182,26 +182,111 @@ class TestIntegration:
         with pytest.raises(RuntimeError):
             converter.to_svg("")
     
-    @pytest.mark.skip
     def test_to_png_function(self):
         """Test the to_png method directly."""
         converter = MermaidConverter()
         
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.mermaid', delete=False) as f:
-            f.write("graph TD\n  A --> B")
-            input_path = Path(f.name)
+        mermaid_code = "graph TD\n  A --> B"
+        png_bytes = converter.to_png(mermaid_code)
+        
+        assert png_bytes is not None, "PNG bytes should not be None"
+        assert len(png_bytes) > 0, "PNG bytes should not be empty"
+        # PNG magic bytes
+        assert png_bytes.startswith(b'\x89PNG'), "Should be valid PNG"
+    
+    def test_to_png_with_css(self):
+        """Test PNG conversion with CSS styling."""
+        converter = MermaidConverter()
+        
+        mermaid_code = "graph TD\n  A --> B"
+        css = ".node { fill: #ff0000; }"
+        png_bytes = converter.to_png(mermaid_code, css=css)
+        
+        assert png_bytes is not None, "PNG bytes should not be None"
+        assert len(png_bytes) > 0, "PNG bytes should not be empty"
+        assert png_bytes.startswith(b'\x89PNG'), "Should be valid PNG"
+    
+    def test_to_png_with_background(self):
+        """Test PNG conversion with background color."""
+        converter = MermaidConverter()
+        
+        mermaid_code = "graph TD\n  A --> B"
+        png_bytes = converter.to_png(mermaid_code, background='#00FF00')
+        
+        assert png_bytes is not None, "PNG bytes should not be None"
+        assert len(png_bytes) > 0, "PNG bytes should not be empty"
+        assert png_bytes.startswith(b'\x89PNG'), "Should be valid PNG"
+    
+    def test_to_png_with_dimensions(self):
+        """Test PNG conversion with custom width/height."""
+        converter = MermaidConverter()
+        
+        mermaid_code = "graph TD\n  A --> B"
+        png_bytes = converter.to_png(mermaid_code, width=400, height=300)
+        
+        assert png_bytes is not None, "PNG bytes should not be None"
+        assert len(png_bytes) > 0, "PNG bytes should not be empty"
+        assert png_bytes.startswith(b'\x89PNG'), "Should be valid PNG"
+    
+    def test_to_svg_with_css(self):
+        """Test SVG conversion with CSS styling."""
+        converter = MermaidConverter()
+        
+        mermaid_code = "graph TD\n  A --> B"
+        css = ".node { fill: #ff0000; }"
+        svg = converter.to_svg(mermaid_code, css=css)
+        
+        assert svg is not None, "SVG should not be None"
+        assert len(svg) > 0, "SVG should not be empty"
+        assert '<svg' in svg, "SVG should contain SVG tag"
+        assert 'style' in svg.lower(), "SVG should contain style tag from CSS"
+        assert is_valid_svg(svg), "SVG should be valid"
+    
+    def test_to_svg_with_css_file_output(self):
+        """Test SVG conversion with CSS styling and file output."""
+        converter = MermaidConverter()
+        
+        mermaid_code = "graph TD\n  A --> B"
+        css = ".node { fill: #ff0000; }"
+        
+        with tempfile.NamedTemporaryFile(suffix='.svg', delete=False) as f:
+            output_path = Path(f.name)
         
         try:
-            png_bytes = converter.to_png(input_path)
+            converter.to_svg(mermaid_code, output_file=output_path, css=css)
             
-            assert png_bytes is not None, "PNG bytes should not be None"
-            assert len(png_bytes) > 0, "PNG bytes should not be empty"
-            # PNG magic bytes
-            assert png_bytes.startswith(b'\x89PNG'), "Should be valid PNG"
+            assert output_path.exists(), "Output file should exist"
+            assert output_path.stat().st_size > 0, "Output file should not be empty"
+            
+            with open(output_path, 'r') as svg_file:
+                svg_content = svg_file.read()
+            
+            assert '<svg' in svg_content, "SVG should contain SVG tag"
+            assert 'style' in svg_content.lower(), "SVG should contain style tag from CSS"
+            assert is_valid_svg(svg_content), "SVG should be valid"
             
         finally:
-            if input_path.exists():
-                input_path.unlink()
+            if output_path.exists():
+                output_path.unlink()
+    
+    def test_to_png_with_all_options(self):
+        """Test PNG conversion with all optional parameters."""
+        converter = MermaidConverter()
+        
+        mermaid_code = "graph TD\n  A --> B"
+        css = ".node { fill: #ff0000; }"
+        png_bytes = converter.to_png(
+            mermaid_code,
+            width=500,
+            height=400,
+            resolution=150,
+            background='#FFFFFF',
+            css=css
+        )
+        
+        assert png_bytes is not None, "PNG bytes should not be None"
+        assert len(png_bytes) > 0, "PNG bytes should not be empty"
+        assert png_bytes.startswith(b'\x89PNG'), "Should be valid PNG"
     
     @pytest.mark.skip
     def test_to_pdf_function(self):
