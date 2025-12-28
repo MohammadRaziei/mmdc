@@ -87,7 +87,6 @@ class TestIntegration:
             if output_path.exists():
                 output_path.unlink()
     
-    @pytest.mark.skip
     def test_convert_pdf(self):
         """Test convert method for PDF files."""
         converter = MermaidConverter()
@@ -104,8 +103,13 @@ class TestIntegration:
         try:
             success = converter.convert(input_path, output_path)
             
-            # PDF conversion is not implemented yet
-            assert success is False, "PDF conversion should fail (not implemented)"
+            assert success is True, "PDF conversion should succeed"
+            assert output_path.exists(), "Output file should exist"
+            assert output_path.stat().st_size > 0, "Output file should not be empty"
+            
+            with open(output_path, 'rb') as pdf_file:
+                magic = pdf_file.read(8)
+                assert magic.startswith(b'%PDF'), "Should be valid PDF"
             
         finally:
             if input_path.exists():
