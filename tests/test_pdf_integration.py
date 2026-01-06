@@ -191,8 +191,10 @@ class TestPDFIntegration:
             css_path = Path(f.name)
 
         try:
-            success = converter.convert(
-                input_path, output_path,
+            # Read the input file content
+            input_content = input_path.read_text()
+            result = converter.convert(
+                input_content, output_path,
                 theme="forest",
                 background="#ffffff",
                 width=1200,
@@ -202,7 +204,7 @@ class TestPDFIntegration:
                 scale=1.5
             )
 
-            assert success is True, "Conversion should succeed"
+            assert result is None, "Conversion should succeed and return None when output file specified"
             assert output_path.exists(), "Output file should exist"
             assert output_path.stat().st_size > 0, "Output file should not be empty"
 

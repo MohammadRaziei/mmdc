@@ -347,24 +347,23 @@ class MermaidConverter:
         If output_file is provided, writes to the file and returns None.
         """
         try:
-            # Determine if input is a string or file-like object
+            # Determine if input is a string or Path object
             if isinstance(input, str):
-                # String
+                # String input
                 mermaid_code = input
-                # If it's a string, we need to determine the output format from the output_file extension
-                if output_file is None:
-                    # If no output file is specified, default to SVG
-                    output_ext = ".svg"
-                else:
-                    output_ext = output_file.suffix.lower()
+            elif isinstance(input, Path):
+                # Path object - read the content
+                mermaid_code = input.read_text()
             else:
-                # File-like object - read the content to determine format if needed
+                # File-like object - read the content
                 mermaid_code = input.read()
-                # If input is file-like and no output file specified, default to SVG
-                if output_file is None:
-                    output_ext = ".svg"
-                else:
-                    output_ext = output_file.suffix.lower()
+
+            # Determine output format from the output_file extension
+            if output_file is None:
+                # If no output file is specified, default to SVG
+                output_ext = ".svg"
+            else:
+                output_ext = output_file.suffix.lower()
 
             if output_ext == ".svg":
                 result = self.to_svg(

@@ -137,9 +137,11 @@ class TestIntegration:
             output_path = Path(f.name)
 
         try:
-            success = converter.convert(input_path, output_path)
+            # Read the input file content
+            input_content = input_path.read_text()
+            result = converter.convert(input_content, output_path)
 
-            assert success is False, "Conversion should fail for invalid format"
+            assert result is None, "Conversion should fail for invalid format and return None"
 
         finally:
             if input_path.exists():
@@ -162,9 +164,11 @@ class TestIntegration:
                 output_path = Path(f.name)
 
             try:
-                success = converter.convert(input_path, output_path, theme=theme)
+                # Read the input file content
+                input_content = input_path.read_text()
+                result = converter.convert(input_content, output_path, theme=theme)
 
-                assert success is True, f"Conversion should succeed for theme {theme}"
+                assert result is None, f"Conversion should succeed for theme {theme} and return None when output file specified"
                 assert output_path.exists(), "Output file should exist"
                 assert output_path.stat().st_size > 0, "Output file should not be empty"
 
@@ -194,9 +198,11 @@ class TestIntegration:
             output_path = Path(f.name)
 
         try:
-            success = converter.convert(input_path, output_path, background="#ff0000")
+            # Read the input file content
+            input_content = input_path.read_text()
+            result = converter.convert(input_content, output_path, background="#ff0000")
 
-            assert success is True, "Conversion should succeed with custom background"
+            assert result is None, "Conversion should succeed with custom background and return None when output file specified"
             assert output_path.exists(), "Output file should exist"
             assert output_path.stat().st_size > 0, "Output file should not be empty"
 
@@ -232,9 +238,11 @@ class TestIntegration:
             config_path = Path(f.name)
 
         try:
-            success = converter.convert(input_path, output_path, config_file=config_path)
+            # Read the input file content
+            input_content = input_path.read_text()
+            result = converter.convert(input_content, output_path, config_file=config_path)
 
-            assert success is True, "Conversion should succeed with config file"
+            assert result is None, "Conversion should succeed with config file and return None when output file specified"
             assert output_path.exists(), "Output file should exist"
             assert output_path.stat().st_size > 0, "Output file should not be empty"
 
@@ -272,9 +280,11 @@ class TestIntegration:
             css_path = Path(f.name)
 
         try:
-            success = converter.convert(input_path, output_path, css_file=css_path)
+            # Read the input file content
+            input_content = input_path.read_text()
+            result = converter.convert(input_content, output_path, css_file=css_path)
 
-            assert success is True, "Conversion should succeed with CSS file"
+            assert result is None, "Conversion should succeed with CSS file and return None when output file specified"
             assert output_path.exists(), "Output file should exist"
             assert output_path.stat().st_size > 0, "Output file should not be empty"
 
