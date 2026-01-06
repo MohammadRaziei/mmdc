@@ -13,11 +13,18 @@ var width = null;
 var height = null;
 var resolution = 96;
 var background = null;
+var theme = "default";
+var config = null;
+var cssFile = null;
+var scale = 1.0;
 
 for (var i = 1; i < system.args.length; i++) {
     var arg = system.args[i];
     if (arg === '--css' && ++i < system.args.length) {
         css = system.args[i];
+        // i already incremented
+    } else if (arg === '--cssFile' && ++i < system.args.length) {
+        cssFile = system.args[i];
         // i already incremented
     } else if (arg === '--width' && ++i < system.args.length) {
         width = parseInt(system.args[i]);
@@ -30,8 +37,15 @@ for (var i = 1; i < system.args.length; i++) {
         if (isNaN(resolution)) resolution = 96;
     } else if (arg === '--background' && ++i < system.args.length) {
         background = system.args[i];
+    } else if (arg === '--theme' && ++i < system.args.length) {
+        theme = system.args[i];
+    } else if (arg === '--configFile' && ++i < system.args.length) {
+        config = system.args[i];
+    } else if (arg === '--scale' && ++i < system.args.length) {
+        scale = parseFloat(system.args[i]);
+        if (isNaN(scale)) scale = 1.0;
     } else if (arg === '--help') {
-        system.stderr.write("Usage: phantomjs render.js input.mermaid output [--css CSS] [--width W] [--height H] [--resolution R] [--background COLOR]\n");
+        system.stderr.write("Usage: phantomjs render.js input.mermaid output [--css CSS] [--cssFile CSS_FILE] [--width W] [--height H] [--resolution R] [--background COLOR] [--theme THEME] [--configFile CONFIG_FILE] [--scale S]\n");
         system.stderr.write("       output: 'svg', 'png', or 'pdf' for stdout, or filename with .svg/.png/.pdf extension\n");
         phantom.exit(0);
     } else {
@@ -65,6 +79,27 @@ width = parseOptionalInt(width);
 height = parseOptionalInt(height);
 resolution = parseOptionalInt(resolution) || 96;
 
+// Read CSS file if provided
+if (cssFile) {
+    try {
+        css = fs.read(cssFile);
+    } catch (e) {
+        system.stderr.write("ERROR: Unable to read CSS file: " + e.toString() + "\n");
+        phantom.exit(1);
+    }
+}
+
+// Read config file if provided
+var configObj = null;
+if (config) {
+    try {
+        configObj = JSON.parse(fs.read(config));
+    } catch (e) {
+        system.stderr.write("ERROR: Unable to parse config file: " + e.toString() + "\n");
+        phantom.exit(1);
+    }
+}
+
 var mermaidCode;
 if (inputFile === "-") {
     // Read from stdin
@@ -82,25 +117,28 @@ if (inputFile === "-") {
     }
 }
 
+// Prepare parameters to pass to the page
+var params = {
+    theme: theme,
+    config: configObj,
+    css: css,
+    mermaidCode: mermaidCode
+};
+
 page.open('render.html', function (status) {
     if (status !== 'success') {
         system.stderr.write("ERROR: Failed to load page\n");
         phantom.exit(1);
     }
 
-    // Inject CSS if provided
-    if (css) {
-        page.evaluate(function(cssText) {
-            var style = document.createElement('style');
-            style.type = 'text/css';
-            style.appendChild(document.createTextNode(cssText));
-            document.head.appendChild(style);
-        }, css);
-    }
+    // Pass parameters to the page
+    page.evaluate(function(params) {
+        window.mermaidParams = params;
+    }, params);
 
-    var svg = page.evaluate(function (code) {
-        return window.renderMermaidSync(code);
-    }, mermaidCode);
+    var svg = page.evaluate(function () {
+        return window.renderMermaidSync(window.mermaidParams.mermaidCode, window.mermaidParams.theme, window.mermaidParams.config);
+    });
 
     if (!svg) {
         system.stderr.write("ERROR: SVG generation failed\n");
@@ -185,10 +223,12 @@ page.open('render.html', function (status) {
                 }
                 
                 // Apply resolution (DPI) scaling
-                var scale = resolution / 96;
-                finalWidth = Math.round(finalWidth * scale);
-                finalHeight = Math.round(finalHeight * scale);
-                
+                var resolutionScale = resolution / 96;
+                // Apply user scale factor
+                var totalScale = resolutionScale * scale;
+                finalWidth = Math.round(finalWidth * totalScale);
+                finalHeight = Math.round(finalHeight * totalScale);
+
                 // Set viewport and clipRect
                 page.viewportSize = {
                     width: finalWidth,
@@ -200,9 +240,9 @@ page.open('render.html', function (status) {
                     width: finalWidth,
                     height: finalHeight
                 };
-                
-                // Set zoom factor for resolution
-                page.zoomFactor = scale;
+
+                // Set zoom factor for resolution and user scale
+                page.zoomFactor = totalScale;
                 
                 if (writeToStdout) {
                     // Raster output to stdout is not supported

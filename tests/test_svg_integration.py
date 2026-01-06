@@ -197,29 +197,109 @@ class TestSVGIntegration:
     def test_to_svg_with_css_file_output(self):
         """Test SVG conversion with CSS styling and file output."""
         converter = MermaidConverter()
-        
+
         mermaid_code = "graph TD\n  A --> B"
         css = ".node { fill: #ff0000; }"
-        
+
         with tempfile.NamedTemporaryFile(suffix='.svg', delete=False) as f:
             output_path = Path(f.name)
-        
+
         try:
             converter.to_svg(mermaid_code, output_file=output_path, css=css)
-            
+
             assert output_path.exists(), "Output file should exist"
             assert output_path.stat().st_size > 0, "Output file should not be empty"
-            
+
             with open(output_path, 'r') as svg_file:
                 svg_content = svg_file.read()
-            
+
             assert '<svg' in svg_content, "SVG should contain SVG tag"
             assert 'style' in svg_content.lower(), "SVG should contain style tag from CSS"
             assert is_valid_svg(svg_content), "SVG should be valid"
-            
+
         finally:
             if output_path.exists():
                 output_path.unlink()
+
+    def test_to_svg_with_theme(self):
+        """Test SVG conversion with different themes."""
+        converter = MermaidConverter(theme="dark")
+
+        mermaid_code = "graph TD\n  A --> B"
+        svg = converter.to_svg(mermaid_code, theme="forest")
+
+        assert svg is not None, "SVG should not be None"
+        assert len(svg) > 0, "SVG should not be empty"
+        assert '<svg' in svg, "SVG should contain SVG tag"
+        assert is_valid_svg(svg), "SVG should be valid"
+
+    def test_to_svg_with_background(self):
+        """Test SVG conversion with custom background."""
+        converter = MermaidConverter(background="transparent")
+
+        mermaid_code = "graph TD\n  A --> B"
+        svg = converter.to_svg(mermaid_code, background="#000000")
+
+        assert svg is not None, "SVG should not be None"
+        assert len(svg) > 0, "SVG should not be empty"
+        assert '<svg' in svg, "SVG should contain SVG tag"
+        assert is_valid_svg(svg), "SVG should be valid"
+
+    def test_to_svg_with_dimensions(self):
+        """Test SVG conversion with custom dimensions."""
+        converter = MermaidConverter(width=1000, height=800)
+
+        mermaid_code = "graph TD\n  A --> B"
+        svg = converter.to_svg(mermaid_code, width=1200, height=900)
+
+        assert svg is not None, "SVG should not be None"
+        assert len(svg) > 0, "SVG should not be empty"
+        assert '<svg' in svg, "SVG should contain SVG tag"
+        assert is_valid_svg(svg), "SVG should be valid"
+
+    def test_to_svg_with_config_file(self):
+        """Test SVG conversion with config file."""
+        # Create a temporary config file
+        config_content = '{"theme": "dark", "flowchart": {"useMaxWidth": false}}'
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write(config_content)
+            config_path = Path(f.name)
+
+        converter = MermaidConverter()
+
+        mermaid_code = "graph TD\n  A --> B"
+        svg = converter.to_svg(mermaid_code, config_file=config_path)
+
+        assert svg is not None, "SVG should not be None"
+        assert len(svg) > 0, "SVG should not be empty"
+        assert '<svg' in svg, "SVG should contain SVG tag"
+        assert is_valid_svg(svg), "SVG should be valid"
+
+        # Cleanup
+        if config_path.exists():
+            config_path.unlink()
+
+    def test_to_svg_with_css_file_param(self):
+        """Test SVG conversion with CSS file parameter."""
+        # Create a temporary CSS file
+        css_content = ".node { fill: #00ff00; stroke: #0000ff; }"
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.css', delete=False) as f:
+            f.write(css_content)
+            css_path = Path(f.name)
+
+        converter = MermaidConverter()
+
+        mermaid_code = "graph TD\n  A --> B"
+        svg = converter.to_svg(mermaid_code, css_file=css_path)
+
+        assert svg is not None, "SVG should not be None"
+        assert len(svg) > 0, "SVG should not be empty"
+        assert '<svg' in svg, "SVG should contain SVG tag"
+        assert is_valid_svg(svg), "SVG should be valid"
+
+        # Cleanup
+        if css_path.exists():
+            css_path.unlink()
 
 
 if __name__ == '__main__':

@@ -6,15 +6,23 @@ from . import MermaidConverter
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert mermaid diagrams to SVG using PhantomJS (phasma)"
+        description="Convert mermaid diagrams to SVG, PNG, or PDF using PhantomJS (phasma)"
     )
     parser.add_argument("-i", "--input", type=Path, required=True, help="Input mermaid file")
-    parser.add_argument("-o", "--output", type=Path, required=True, help="Output SVG file")
+    parser.add_argument("-o", "--output", type=Path, required=True, help="Output file (SVG, PNG, or PDF)")
+    parser.add_argument("-w", "--width", type=int, default=800, help="Width of the generated diagram (default: 800)")
+    parser.add_argument("-H", "--height", type=int, default=600, help="Height of the generated diagram (default: 600)")
+    parser.add_argument("-s", "--scale", type=float, default=1.0, help="Scale factor for the output (default: 1.0)")
+    parser.add_argument("-b", "--backgroundColor", dest="background", default="white", help="Background color (default: white)")
+    parser.add_argument("-t", "--theme", default="default", choices=["default", "forest", "dark", "neutral"], help="Theme to use (default: default)")
+    parser.add_argument("-c", "--configFile", type=Path, help="JSON configuration file for Mermaid")
+    parser.add_argument("--cssFile", type=Path, help="CSS file to inject")
+    parser.add_argument("--puppeteerConfigFile", type=Path, help="JSON configuration file for Puppeteer")
     parser.add_argument("--timeout", type=int, default=30, help="Timeout in seconds")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
-    
+
     args = parser.parse_args()
-    
+
     # Configure logging
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
@@ -24,10 +32,29 @@ def main():
             logging.StreamHandler(sys.stderr)
         ]
     )
-    
-    converter = MermaidConverter(timeout=args.timeout)
-    
-    success = converter.convert(args.input, args.output)
+
+    converter = MermaidConverter(
+        timeout=args.timeout,
+        theme=args.theme,
+        background=args.background,
+        width=args.width,
+        height=args.height,
+        config_file=args.configFile,
+        css_file=args.cssFile,
+        puppeteer_config_file=args.puppeteerConfigFile
+    )
+
+    success = converter.convert(
+        input_file=args.input,
+        output_file=args.output,
+        theme=args.theme,
+        background=args.background,
+        width=args.width,
+        height=args.height,
+        config_file=args.configFile,
+        css_file=args.cssFile,
+        scale=args.scale
+    )
     if success:
         logging.info(f"Successfully converted to {args.output}")
         sys.exit(0)

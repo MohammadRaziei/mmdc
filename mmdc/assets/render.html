@@ -8,12 +8,35 @@
 <div id="container"></div>
 
 <script>
-    mermaid.initialize({
-        startOnLoad: false,
-        theme: "default"
-    });
+    window.renderMermaidSync = function (code, theme, config) {
+        // Default configuration
+        var defaultConfig = {
+            startOnLoad: false,
+            theme: theme || "default"
+        };
 
-    window.renderMermaidSync = function (code) {
+        // Merge with provided config if available
+        var finalConfig = defaultConfig;
+        if (config) {
+            // Merge the default config with the provided config using a more compatible approach
+            finalConfig = {};
+            // Copy default config
+            for (var key in defaultConfig) {
+                if (defaultConfig.hasOwnProperty(key)) {
+                    finalConfig[key] = defaultConfig[key];
+                }
+            }
+            // Override with config values
+            for (var key in config) {
+                if (config.hasOwnProperty(key)) {
+                    finalConfig[key] = config[key];
+                }
+            }
+        }
+
+        // Initialize mermaid with the configuration
+        mermaid.initialize(finalConfig);
+
         var svg;
         var done = false;
         mermaid.render("graphDiv", code, function(svgResult) {
