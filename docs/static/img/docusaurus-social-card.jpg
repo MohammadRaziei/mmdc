@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#ff69b4"/>
+  <text x="600" y="200" text-anchor="middle" fill="white" font-family="Arial" font-size="60" font-weight="bold">mmdc</text>
+  <text x="600" y="300" text-anchor="middle" fill="white" font-family="Arial" font-size="40">Mermaid Diagram Converter</text>
+  <path d="M300,400 Q600,300 900,400 T1200,500" stroke="white" stroke-width="10" fill="none"/>
+  <circle cx="300" cy="400" r="30" fill="white"/>
+  <circle cx="900" cy="400" r="30" fill="white"/>
+  <circle cx="1200" cy="500" r="30" fill="white"/>
+</svg>

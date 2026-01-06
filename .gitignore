@@ -126,3 +126,5 @@ Pipfile.lock
 poetry.lock
 
 build/
+node_modules/
+.docusaurus/
