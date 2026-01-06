@@ -150,9 +150,10 @@ class TestPDFIntegration:
             output_path = Path(f.name)
 
         try:
-            success = converter.convert(input_path, output_path)
+            # The input_path is now a Path object, which the convert method can handle
+            result = converter.convert(input_path, output_path)
 
-            assert success is True, "Conversion should succeed"
+            assert result is None, "Conversion should succeed and return None when output file specified"
             assert output_path.exists(), "Output file should exist"
             assert output_path.stat().st_size > 0, "Output file should not be empty"
 

@@ -50,7 +50,10 @@ def main():
         css_file=args.cssFile,
         scale=args.scale
     )
-    if result is not None:
+    # If output file is specified, result will be None on success
+    # If output file is not specified, result will be the content on success
+    success = (args.output is not None and result is None) or (args.output is None and result is not None)
+    if success:
         logging.info(f"Successfully converted to {args.output}")
         sys.exit(0)
     else:

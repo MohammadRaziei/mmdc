@@ -66,20 +66,20 @@ class TestSVGIntegration:
             output_path = Path(f.name)
         
         try:
-            success = converter.convert(input_path, output_path)
-            
-            assert success is True, f"Conversion should succeed for {description}"
+            result = converter.convert(input_path, output_path)
+
+            assert result is None, f"Conversion should succeed for {description} and return None when output file specified"
             assert output_path.exists(), f"Output file should exist for {description}"
             assert output_path.stat().st_size > 0, f"Output file should not be empty for {description}"
-            
+
             # Check that it's valid SVG
             with open(output_path, 'r') as svg_file:
                 svg_content = svg_file.read()
-            
+
             assert '<svg' in svg_content, f"Output should contain SVG tag for {description}"
             # Basic validation
             assert is_valid_svg(svg_content), f"Output should be valid SVG for {description}"
-            
+
         finally:
             # Cleanup
             if input_path.exists():
@@ -90,13 +90,13 @@ class TestSVGIntegration:
     def test_invalid_input_file(self):
         """Test conversion with non-existent input file."""
         converter = MermaidConverter(timeout=10)
-        
+
         input_path = Path("/non/existent/file.mermaid")
         output_path = Path(tempfile.mktemp(suffix='.svg'))
-        
-        success = converter.convert(input_path, output_path)
-        
-        assert success is False, "Conversion should fail for non-existent file"
+
+        result = converter.convert(input_path, output_path)
+
+        assert result is None, "Conversion should fail for non-existent file and return None"
     
     def test_empty_mermaid(self):
         """Test converting empty Mermaid code."""

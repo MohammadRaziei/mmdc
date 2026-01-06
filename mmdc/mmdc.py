@@ -358,6 +358,10 @@ class MermaidConverter:
                 # File-like object - read the content
                 mermaid_code = input.read()
 
+            # Convert output_file to absolute path if it's provided
+            if output_file is not None:
+                output_file = output_file.absolute()
+
             # Determine output format from the output_file extension
             if output_file is None:
                 # If no output file is specified, default to SVG
