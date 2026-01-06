@@ -15,10 +15,9 @@ from phasma.driver import Driver
 
 class MermaidConverter:
     def __init__(self, timeout: int = 30, theme: str = "default",
-                 background: str = "white", width: int = 800,
-                 height: int = 600, config_file: Optional[Path] = None,
-                 css_file: Optional[Path] = None,
-                 puppeteer_config_file: Optional[Path] = None):
+                 background: str = "white", width: Optional[int] = None,
+                 height: Optional[int] = None, config_file: Optional[Path] = None,
+                 css_file: Optional[Path] = None):
         self.logger = logging.getLogger(__name__)
         # Determine assets directory relative to this file
         self.assets_dir = (Path(__file__).parent / "assets").resolve()
@@ -27,11 +26,10 @@ class MermaidConverter:
         self.timeout = timeout
         self.theme = theme
         self.background = background
-        self.width = width
-        self.height = height
+        self.width = width  # Store the actual value passed in
+        self.height = height  # Store the actual value passed in
         self.config_file = config_file
         self.css_file = css_file
-        self.puppeteer_config_file = puppeteer_config_file
 
         self.driver = Driver()
     
@@ -71,8 +69,9 @@ class MermaidConverter:
         # Use instance defaults or provided parameters
         theme = theme or self.theme
         background = background or self.background
-        width = width or self.width
-        height = height or self.height
+        # Use the explicitly provided width/height, or the instance values if they were set
+        width = width if width is not None else self.width
+        height = height if height is not None else self.height
         config_file = config_file or self.config_file
         css_file = css_file or self.css_file
 
@@ -85,9 +84,11 @@ class MermaidConverter:
         # Add background
         args.extend(["--background", background])
 
-        # Add dimensions
-        args.extend(["--width", str(width)])
-        args.extend(["--height", str(height)])
+        # Add dimensions only if explicitly provided (not None)
+        if width is not None:
+            args.extend(["--width", str(width)])
+        if height is not None:
+            args.extend(["--height", str(height)])
 
         # Add config file if provided
         if config_file is not None and config_file.exists():
@@ -175,8 +176,9 @@ class MermaidConverter:
         # Use instance defaults or provided parameters
         theme = theme or self.theme
         background = background or self.background
-        width = width or self.width
-        height = height or self.height
+        # Use the explicitly provided width/height, or the instance values if they were set
+        width = width if width is not None else self.width
+        height = height if height is not None else self.height
         config_file = config_file or self.config_file
         css_file = css_file or self.css_file
 
@@ -197,7 +199,7 @@ class MermaidConverter:
         # Add background
         args.extend(["--background", background])
 
-        # Add dimensions
+        # Add dimensions only if explicitly provided (not None)
         if width is not None:
             args.extend(["--width", str(width)])
         if height is not None:
