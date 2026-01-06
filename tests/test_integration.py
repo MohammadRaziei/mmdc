@@ -62,57 +62,61 @@ class TestIntegration:
     def test_convert_png(self):
         """Test convert method for PNG files."""
         converter = MermaidConverter()
-        
+
         mermaid_code = "graph TD\n  A --> B"
-        
+
         with tempfile.NamedTemporaryFile(mode='w', suffix='.mermaid', delete=False) as f:
             f.write(mermaid_code)
             input_path = Path(f.name)
-        
+
         with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
             output_path = Path(f.name)
-        
+
         try:
-            success = converter.convert(input_path, output_path)
-            
-            assert success is True, "Conversion should succeed"
+            # Read the input file content
+            input_content = input_path.read_text()
+            result = converter.convert(input_content, output_path)
+
+            assert result is None, "Conversion should succeed and return None when output file specified"
             assert output_path.exists(), "Output file should exist"
             assert output_path.stat().st_size > 0, "Output file should not be empty"
-            
+
             with open(output_path, 'rb') as png_file:
                 magic = png_file.read(8)
                 assert magic.startswith(b'\x89PNG'), "Should be valid PNG"
-            
+
         finally:
             if input_path.exists():
                 input_path.unlink()
             if output_path.exists():
                 output_path.unlink()
-    
+
     def test_convert_pdf(self):
         """Test convert method for PDF files."""
         converter = MermaidConverter()
-        
+
         mermaid_code = "graph TD\n  A --> B"
-        
+
         with tempfile.NamedTemporaryFile(mode='w', suffix='.mermaid', delete=False) as f:
             f.write(mermaid_code)
             input_path = Path(f.name)
-        
+
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
             output_path = Path(f.name)
-        
+
         try:
-            success = converter.convert(input_path, output_path)
-            
-            assert success is True, "PDF conversion should succeed"
+            # Read the input file content
+            input_content = input_path.read_text()
+            result = converter.convert(input_content, output_path)
+
+            assert result is None, "PDF conversion should succeed and return None when output file specified"
             assert output_path.exists(), "Output file should exist"
             assert output_path.stat().st_size > 0, "Output file should not be empty"
-            
+
             with open(output_path, 'rb') as pdf_file:
                 magic = pdf_file.read(8)
                 assert magic.startswith(b'%PDF'), "Should be valid PDF"
-            
+
         finally:
             if input_path.exists():
                 input_path.unlink()
