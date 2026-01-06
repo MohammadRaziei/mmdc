@@ -14,22 +14,13 @@ from phasma.driver import Driver
 
 
 class MermaidConverter:
-    def __init__(self, timeout: int = 30, theme: str = "default",
-                 background: str = "white", width: Optional[int] = None,
-                 height: Optional[int] = None, config_file: Optional[Path] = None,
-                 css_file: Optional[Path] = None):
+    def __init__(self, timeout: int = 30):
         self.logger = logging.getLogger(__name__)
         # Determine assets directory relative to this file
         self.assets_dir = (Path(__file__).parent / "assets").resolve()
         self.render_js = "render.js"
         self.render_html = "render.html"
         self.timeout = timeout
-        self.theme = theme
-        self.background = background
-        self.width = width  # Store the actual value passed in
-        self.height = height  # Store the actual value passed in
-        self.config_file = config_file
-        self.css_file = css_file
 
         self.driver = Driver()
     
@@ -66,14 +57,12 @@ class MermaidConverter:
             # File-like object
             mermaid_code = input.read()
 
-        # Use instance defaults or provided parameters
-        theme = theme or self.theme
-        background = background or self.background
-        # Use the explicitly provided width/height, or the instance values if they were set
-        width = width if width is not None else self.width
-        height = height if height is not None else self.height
-        config_file = config_file or self.config_file
-        css_file = css_file or self.css_file
+        # Use default values or provided parameters
+        theme = theme or "default"
+        background = background or "white"
+        # Use the explicitly provided width/height, otherwise None (will use natural size)
+        config_file = config_file
+        css_file = css_file
 
         # Build command arguments for render.js
         args = [str(self.render_js), "-", "svg"]
@@ -173,14 +162,12 @@ class MermaidConverter:
         else:
             mermaid_code = input.read()
 
-        # Use instance defaults or provided parameters
-        theme = theme or self.theme
-        background = background or self.background
-        # Use the explicitly provided width/height, or the instance values if they were set
-        width = width if width is not None else self.width
-        height = height if height is not None else self.height
-        config_file = config_file or self.config_file
-        css_file = css_file or self.css_file
+        # Use default values or provided parameters
+        theme = theme or "default"
+        background = background or "white"
+        # Use the explicitly provided width/height, otherwise None (will use natural size)
+        config_file = config_file
+        css_file = css_file
 
         # If output_file is None, use a temporary file
         temp_file = None
@@ -349,27 +336,38 @@ class MermaidConverter:
             scale=scale
         )
     
-    def convert(self, input_file: Path, output_file: Path,
+    def convert(self, input: Union[str, TextIO], output_file: Optional[Path] = None,
                 theme: Optional[str] = None, background: Optional[str] = None,
                 width: Optional[int] = None, height: Optional[int] = None,
                 config_file: Optional[Path] = None, css_file: Optional[Path] = None,
-                scale: float = 1.0) -> bool:
+                scale: float = 1.0) -> Optional[Union[str, bytes]]:
         """
         Convert Mermaid diagram to SVG, PNG, or PDF based on output file extension.
-        Returns True on success.
+        If output_file is None, returns the content as string (for SVG) or bytes (for PNG/PDF).
+        If output_file is provided, writes to the file and returns None.
         """
-        # Ensure absolute paths
-        input_file = input_file.absolute()
-        output_file = output_file.absolute()
-
-        output_ext = output_file.suffix.lower()
-
         try:
-            # Read Mermaid code from file
-            mermaid_code = input_file.read_text()
+            # Determine if input is a string or file-like object
+            if isinstance(input, str):
+                # String
+                mermaid_code = input
+                # If it's a string, we need to determine the output format from the output_file extension
+                if output_file is None:
+                    # If no output file is specified, default to SVG
+                    output_ext = ".svg"
+                else:
+                    output_ext = output_file.suffix.lower()
+            else:
+                # File-like object - read the content to determine format if needed
+                mermaid_code = input.read()
+                # If input is file-like and no output file specified, default to SVG
+                if output_file is None:
+                    output_ext = ".svg"
+                else:
+                    output_ext = output_file.suffix.lower()
 
             if output_ext == ".svg":
-                svg_content = self.to_svg(
+                result = self.to_svg(
                     input=mermaid_code,
                     output_file=output_file,
                     theme=theme,
@@ -379,10 +377,13 @@ class MermaidConverter:
                     config_file=config_file,
                     css_file=css_file
                 )
-                self.logger.debug(f"SVG written to {output_file}")
-                return True
+                if output_file is None:
+                    self.logger.debug("SVG content generated")
+                else:
+                    self.logger.debug(f"SVG written to {output_file}")
+                return result
             elif output_ext == ".png":
-                self.to_png(
+                result = self.to_png(
                     input=mermaid_code,
                     output_file=output_file,
                     theme=theme,
@@ -393,10 +394,13 @@ class MermaidConverter:
                     css_file=css_file,
                     scale=scale
                 )
-                self.logger.debug(f"PNG written to {output_file}")
-                return True
+                if output_file is None:
+                    self.logger.debug("PNG bytes generated")
+                else:
+                    self.logger.debug(f"PNG written to {output_file}")
+                return result
             elif output_ext == ".pdf":
-                self.to_pdf(
+                result = self.to_pdf(
                     input=mermaid_code,
                     output_file=output_file,
                     theme=theme,
@@ -407,12 +411,15 @@ class MermaidConverter:
                     css_file=css_file,
                     scale=scale
                 )
-                self.logger.debug(f"PDF written to {output_file}")
-                return True
+                if output_file is None:
+                    self.logger.debug("PDF bytes generated")
+                else:
+                    self.logger.debug(f"PDF written to {output_file}")
+                return result
             else:
                 self.logger.error(f"Unsupported output format: {output_ext}. Use .svg, .png, or .pdf")
-                return False
+                return None
 
         except Exception as e:
             self.logger.error(f"Exception: {e}")
-            return False
+            return None

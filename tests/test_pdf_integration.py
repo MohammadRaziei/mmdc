@@ -168,7 +168,7 @@ class TestPDFIntegration:
 
     def test_convert_pdf_with_options(self):
         """Test convert method for PDF files with additional options."""
-        converter = MermaidConverter(theme="dark", background="#000000", width=1000, height=800)
+        converter = MermaidConverter()
 
         mermaid_code = "graph TD\n  A --> B"
 

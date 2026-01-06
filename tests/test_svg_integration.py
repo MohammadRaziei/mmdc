@@ -223,7 +223,7 @@ class TestSVGIntegration:
 
     def test_to_svg_with_theme(self):
         """Test SVG conversion with different themes."""
-        converter = MermaidConverter(theme="dark")
+        converter = MermaidConverter()
 
         mermaid_code = "graph TD\n  A --> B"
         svg = converter.to_svg(mermaid_code, theme="forest")
@@ -235,7 +235,7 @@ class TestSVGIntegration:
 
     def test_to_svg_with_background(self):
         """Test SVG conversion with custom background."""
-        converter = MermaidConverter(background="transparent")
+        converter = MermaidConverter()
 
         mermaid_code = "graph TD\n  A --> B"
         svg = converter.to_svg(mermaid_code, background="#000000")
@@ -247,7 +247,7 @@ class TestSVGIntegration:
 
     def test_to_svg_with_dimensions(self):
         """Test SVG conversion with custom dimensions."""
-        converter = MermaidConverter(width=1000, height=800)
+        converter = MermaidConverter()
 
         mermaid_code = "graph TD\n  A --> B"
         svg = converter.to_svg(mermaid_code, width=1200, height=900)

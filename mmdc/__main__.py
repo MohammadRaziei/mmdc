@@ -33,17 +33,14 @@ def main():
     )
 
     converter = MermaidConverter(
-        timeout=args.timeout,
-        theme=args.theme,
-        background=args.background,
-        width=args.width,
-        height=args.height,
-        config_file=args.configFile,
-        css_file=args.cssFile
+        timeout=args.timeout
     )
 
-    success = converter.convert(
-        input_file=args.input,
+    # Read the input file content
+    input_content = args.input.read_text()
+
+    result = converter.convert(
+        input=input_content,
         output_file=args.output,
         theme=args.theme,
         background=args.background,
@@ -53,7 +50,7 @@ def main():
         css_file=args.cssFile,
         scale=args.scale
     )
-    if success:
+    if result is not None:
         logging.info(f"Successfully converted to {args.output}")
         sys.exit(0)
     else:

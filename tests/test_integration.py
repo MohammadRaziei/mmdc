@@ -28,29 +28,31 @@ class TestIntegration:
     def test_convert_svg(self):
         """Test convert method for SVG files."""
         converter = MermaidConverter()
-        
+
         mermaid_code = "graph TD\n  A --> B"
-        
+
         with tempfile.NamedTemporaryFile(mode='w', suffix='.mermaid', delete=False) as f:
             f.write(mermaid_code)
             input_path = Path(f.name)
-        
+
         with tempfile.NamedTemporaryFile(suffix='.svg', delete=False) as f:
             output_path = Path(f.name)
-        
+
         try:
-            success = converter.convert(input_path, output_path)
-            
-            assert success is True, "Conversion should succeed"
+            # Read the input file content
+            input_content = input_path.read_text()
+            result = converter.convert(input_content, output_path)
+
+            assert result is None, "Conversion should succeed and return None when output file specified"
             assert output_path.exists(), "Output file should exist"
             assert output_path.stat().st_size > 0, "Output file should not be empty"
-            
+
             with open(output_path, 'r') as svg_file:
                 svg_content = svg_file.read()
-            
+
             assert '<svg' in svg_content, "Output should contain SVG tag"
             assert is_valid_svg(svg_content), "Output should be valid SVG"
-            
+
         finally:
             if input_path.exists():
                 input_path.unlink()
@@ -144,7 +146,7 @@ class TestIntegration:
     def test_convert_with_themes(self):
         """Test convert method with different themes."""
         for theme in ["default", "forest", "dark", "neutral"]:
-            converter = MermaidConverter(theme=theme)
+            converter = MermaidConverter()
 
             mermaid_code = "graph TD\n  A --> B"
 
