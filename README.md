@@ -5,6 +5,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://github.com/MohammadRaziei/mmdc/actions/workflows/test.yml/badge.svg)](https://github.com/MohammadRaziei/mmdc/actions/workflows/test.yml)
 
+
+<div align="center">
+<img src="https://raw.githubusercontent.com/MohammadRaziei/mmdc/master/docs/static/img/logo.svg" width="150pt">
+</div>
+
 A Python tool for converting Mermaid diagrams to SVG, PNG, and PDF using PhantomJS (via [phasma](https://pypi.org/project/phasma/)). Perfect for automating diagram generation in documentation pipelines, CI/CD workflows, and static site generation.
 
 ## Features
@@ -152,7 +157,7 @@ converter.to_pdf(
 
 Create a file `flowchart.mermaid`:
 
-```mermaid
+```
 graph TD
     A[Start] --> B{Decision}
     B -->|Yes| C[Action 1]
@@ -178,7 +183,7 @@ mmdc --input flowchart.mermaid --output flowchart.pdf
 
 Create a file `sequence.mermaid`:
 
-```mermaid
+```
 sequenceDiagram
     participant Alice
     participant Bob
@@ -196,7 +201,7 @@ mmdc --input sequence.mermaid --output sequence.png
 
 Create a file `gantt.mermaid`:
 
-```mermaid
+```
 gantt
     title A Gantt Diagram
     dateFormat  YYYY-MM-DD
@@ -247,7 +252,6 @@ Tests cover:
 1. **Template Preparation**: Uses embedded HTML/JavaScript templates in `mmdc/assets/`
 2. **Diagram Rendering**: PhantomJS loads the Mermaid library and renders the diagram
 3. **Output Generation**: The rendered diagram is converted to the requested format (SVG, PNG, or PDF)
-4. **Cleanup**: Temporary files are cleaned up automatically
 
 ## Development
 
@@ -268,27 +272,6 @@ Tests cover:
    ```bash
    pytest tests/ -v
    ```
-
-### Code Quality
-
-The project uses several tools for maintaining code quality:
-
-- **Black**: Code formatting
-- **Ruff**: Linting
-- **MyPy**: Type checking
-- **Pytest**: Testing with coverage
-
-Run all code quality checks:
-
-```bash
-hatch run lint:all
-```
-
-Format code:
-
-```bash
-hatch run lint:fmt
-```
 
 ## Contributing
 
