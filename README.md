@@ -10,16 +10,22 @@
 <img src="https://raw.githubusercontent.com/MohammadRaziei/mmdc/master/docs/static/img/logo.svg" width="150pt">
 </div>
 
-A Python tool for converting Mermaid diagrams to SVG, PNG, and PDF using PhantomJS (via [phasma](https://pypi.org/project/phasma/)). Perfect for automating diagram generation in documentation pipelines, CI/CD workflows, and static site generation.
+A Python tool for converting Mermaid diagrams to SVG, PNG, and PDF using PhantomJS (via [phasma](https://pypi.org/project/phasma/)) - the only dependency needed. Unlike other tools, mmdc works completely offline without requiring browsers, drivers, npm, or nodejs installations. It's a faithful Python port of mermaid.js that allows you to run exactly the same Mermaid code with full CLI and Python API functionality. Perfect for automating diagram generation in documentation pipelines, CI/CD workflows, and static site generation.
 
 ## Features
 
+- **No Browser/Driver Dependencies**: Works completely without external browsers or drivers like Chrome/Chromium
+- **No NPM/Node.js Required**: Unlike other tools, no need to install npm, nodejs or any JavaScript runtime
+- **Powered by Phasma**: Uses the Phasma package as the only dependency to interface with PhantomJS, providing a pure Python solution
+- **Direct Mermaid.js Port**: A faithful Python port of mermaid.js - use exactly the same Mermaid code
+- **Completely Offline**: Run Mermaid diagrams locally without any internet connection or external dependencies
+- **Command Line Interface**: CLI functionality similar to mmdc in mermaid-cli for easy automation
+- **Python API**: Full-featured Python API for integration into your Python applications
 - **Multiple Output Formats**: Convert Mermaid diagrams to SVG, PNG, and PDF
 - **Multiple Diagram Types**: Supports flowcharts, sequence diagrams, Gantt charts, pie charts, and more
-- **Command Line & Python API**: Use as a CLI tool or import as a Python library
 - **Configurable Options**: Set custom timeouts, dimensions, resolution, background colors, and CSS styling
 - **Comprehensive Testing**: Fully tested with parametrized tests covering various scenarios
-- **Logging Support**: Built-in logging with verbose mode for debugging
+- **Unique Differentiation**: Unlike other packages on PyPI, provides a complete solution without external dependencies
 
 ## Installation
 
@@ -241,11 +247,13 @@ Tests cover:
 
 ## How It Works
 
-`mmdc` uses [PhantomJS](https://phantomjs.org/) via the [Phasma](https://pypi.org/project/phasma/) Python package to render Mermaid diagrams. The process:
+`mmdc` uses [PhantomJS](https://phantomjs.org/) via the [Phasma](https://pypi.org/project/phasma/) Python package - the only dependency needed - to render Mermaid diagrams completely offline, without requiring external browsers, drivers, npm, or nodejs installations. This makes it a pure Python solution that's a faithful port of mermaid.js. The process:
 
 1. **Template Preparation**: Uses embedded HTML/JavaScript templates in `mmdc/assets/`
 2. **Diagram Rendering**: PhantomJS loads the Mermaid library and renders the diagram
 3. **Output Generation**: The rendered diagram is converted to the requested format (SVG, PNG, or PDF)
+
+This approach differentiates `mmdc` from other packages on PyPI by providing a complete solution without external dependencies, allowing you to run exactly the same Mermaid code offline with both CLI and Python API functionality.
 
 
 ## Contributing
@@ -267,8 +275,8 @@ Please ensure your code passes all tests and follows the project's coding standa
 ## Acknowledgments
 
 - [Mermaid.js](https://mermaid-js.github.io/) for the amazing diagramming library
-- [Phasma](https://pypi.org/project/phasma/) for the PhantomJS Python integration
-- [PhantomJS](https://phantomjs.org/) for headless browser capabilities
+- [Phasma](https://pypi.org/project/phasma/) for the PhantomJS Python integration that enables our pure Python solution without external dependencies
+- [PhantomJS](https://phantomjs.org/) for headless browser capabilities that allow offline processing
 
 ## Support
 
