@@ -3,7 +3,7 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/mmdc.svg)](https://pypi.org/project/mmdc)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mmdc.svg)](https://pypi.org/project/mmdc)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://github.com/MohammadRaziei/mmdc/actions/workflows/test.yml/badge.svg)](https://github.com/MohammadRaziei/mmdc/actions/workflows/test.yml)
+[![Tests](https://github.com/MohammadRaziei/mmdc/actions/workflows/wheel.yml/badge.svg)](https://github.com/MohammadRaziei/mmdc/actions/workflows/wheel.yml)
 
 
 <div align="center">
@@ -32,9 +32,7 @@ pip install mmdc
 ### From Source
 
 ```bash
-git clone https://github.com/MohammadRaziei/mmdc.git
-cd mmdc
-pip install -e .
+pip install git+https://github.com/MohammadRaziei/mmdc.git
 ```
 
 ## Usage
@@ -80,15 +78,11 @@ from pathlib import Path
 converter = MermaidConverter()
 
 # Convert a diagram (output format determined by file extension)
-success = converter.convert(
-    input_file=Path("diagram.mermaid"),
+converter.convert(
+    input=Path("diagram.mermaid"),
     output_file=Path("diagram.svg")  # or .png or .pdf
 )
 
-if success:
-    print("Conversion successful!")
-else:
-    print("Conversion failed.")
 ```
 
 #### Direct Format Conversion
@@ -247,31 +241,12 @@ Tests cover:
 
 ## How It Works
 
-`mmdc` uses [PhantomJS](https://phantomjs.org/) via the [phasma](https://pypi.org/project/phasma/) Python package to render Mermaid diagrams. The process:
+`mmdc` uses [PhantomJS](https://phantomjs.org/) via the [Phasma](https://pypi.org/project/phasma/) Python package to render Mermaid diagrams. The process:
 
 1. **Template Preparation**: Uses embedded HTML/JavaScript templates in `mmdc/assets/`
 2. **Diagram Rendering**: PhantomJS loads the Mermaid library and renders the diagram
 3. **Output Generation**: The rendered diagram is converted to the requested format (SVG, PNG, or PDF)
 
-## Development
-
-### Setting Up Development Environment
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/MohammadRaziei/mmdc.git
-   cd mmdc
-   ```
-
-2. Install development dependencies:
-   ```bash
-   pip install -e ".[dev]"
-   ```
-
-3. Run tests:
-   ```bash
-   pytest tests/ -v
-   ```
 
 ## Contributing
 
@@ -292,8 +267,8 @@ Please ensure your code passes all tests and follows the project's coding standa
 ## Acknowledgments
 
 - [Mermaid.js](https://mermaid-js.github.io/) for the amazing diagramming library
+- [Phasma](https://pypi.org/project/phasma/) for the PhantomJS Python integration
 - [PhantomJS](https://phantomjs.org/) for headless browser capabilities
-- [phasma](https://pypi.org/project/phasma/) for the PhantomJS Python integration
 
 ## Support
 
