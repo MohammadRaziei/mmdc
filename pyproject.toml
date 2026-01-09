@@ -31,6 +31,9 @@ test = [
   "pytest-cov"
 ]
 
+[project.scripts]
+mmdc = "mmdc.__main__:main"
+
 [project.urls]
 Source = "https://github.com/mohammadraziei/mmdc"
 Issues = "https://github.com/mohammadraziei/mmdc/issues"
