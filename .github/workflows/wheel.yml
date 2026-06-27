@@ -79,7 +79,7 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest -v -n 4 --cov 
+          python -m pytest -v -n 4 -x --cov 
 
   release:
     name: Release Assets and Upload to PyPI
