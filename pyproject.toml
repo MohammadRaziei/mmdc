@@ -28,7 +28,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-  "pytest-cov"
+  "pytest-cov", "pytest-asyncio"
 ]
 
 [project.scripts]
