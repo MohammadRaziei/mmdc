@@ -11,7 +11,7 @@
 
 Convert Mermaid diagrams to SVG, PNG, and PDF — **fully offline and fast, just `pip install mmdc`**.
 
-No Node.js. No npm. No Chrome. No system packages. Powered by [Phasma](https://pypi.org/project/phasma/).
+No Node.js. No npm. No Chrome. No system packages. Powered by [Phasma](https://github.com/mohammadraziei/phasma/).
 
 ---
 
@@ -159,13 +159,15 @@ await m.convert(DIAGRAM, "out.pdf")   # → PDF
 ## CLI
 
 ```bash
-# basic
+# SVG to stdout (no -o needed)
+mmdc -i diagram.mermaid
+cat diagram.mermaid | mmdc -i -
+echo "graph TD\n    A-->B" | mmdc -i -
+
+# save to file (format from extension)
 mmdc -i diagram.mermaid -o diagram.svg
 mmdc -i diagram.mermaid -o diagram.png
 mmdc -i diagram.mermaid -o diagram.pdf
-
-# stdin
-cat diagram.mermaid | mmdc -i - -o diagram.svg
 
 # scale
 mmdc -i diagram.mermaid -o diagram.png --scale 2.0
@@ -179,6 +181,9 @@ mmdc -i diagram.mermaid -o diagram.pdf --pdf-format A4 --landscape --margin 1cm
 
 # config & CSS
 mmdc -i diagram.mermaid -o diagram.svg --config config.json --css style.css
+
+# info — Mermaid library version
+mmdc --info
 
 # version
 mmdc --version
