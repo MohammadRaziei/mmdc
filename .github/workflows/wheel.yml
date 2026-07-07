@@ -65,17 +65,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Download built wheel
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
 
       - name: Install wheel
         run: |
-          ls dist
           pip install pip pytest-cov pytest-xdist pytest-asyncio
-          pip install -e .
+          pip install -e ".[all]"
 
       - name: Run tests
         run: |
