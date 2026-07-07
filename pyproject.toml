@@ -5,11 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "mmdc"
 dynamic = ["version"]
-description = "Python-native Mermaid diagram converter – no browser, Node.js, or npm required. Renders diagrams to SVG using Phasma, perfect for documentation automation and CI/CD pipelines."
+description = "Python-native Mermaid diagram converter – no browser, Node.js, or npm required. Renders diagrams to SVG/PNG/PDF, perfect for documentation automation and CI/CD pipelines."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
-keywords = ["mermaid", "diagram", "svg", "phasma", "phantomjs", "documentation", "automation", "ci-cd", "python"]
+keywords = ["mermaid", "diagram", "svg", "quickjs", "resvg", "documentation", "automation", "ci-cd", "python"]
 authors = [
   { name = "Mohammad Raziei", email = "mohammadraziei1375@gmail.com" },
 ]
@@ -20,10 +20,10 @@ classifiers = [
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "phasma>=0.7.1", 
+    "quickjs-ng>=0.15.1",
+    "resvg_py>=0.3.2",
 ]
 
 [project.optional-dependencies]

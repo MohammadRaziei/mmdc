@@ -1,9 +1,13 @@
 """
-mmdc — Mermaid diagram converter backed by a persistent PhantomJS session.
+mmdc — Mermaid diagram converter backed by a persistent QuickJS session.
 
-One MermaidConverter instance = one PhantomJS process, reused across all
-conversions. Supports SVG, PNG, and PDF output. Works fully offline — the
-Mermaid JS library is bundled inside the package.
+One MermaidConverter instance = one QuickJS context with mermaid.js loaded,
+reused across all conversions, pinned to a single dedicated worker thread.
+Supports SVG, PNG, and PDF output. Works fully offline and without any
+browser, Node.js, or npm — the Mermaid JS library is bundled inside the
+package and executed in a small embedded JS engine (QuickJS-ng); text
+metrics (the one thing a fake DOM can't fabricate) are computed for real via
+Cairo, the same library used for the final SVG->PNG/PDF conversion.
 
 Usage
 -----
@@ -14,7 +18,7 @@ Usage
         async with MermaidConverter() as m:
             svg = await m.to_svg("graph TD\\nA-->B")
             png = await m.to_png("graph TD\\nA-->B", scale=2.0)
-            await m.to_pdf("graph TD\\nA-->B", output="diagram.pdf")
+            await m.to_pdf("graph LR\\nA-->B", output="diagram.pdf")
 
     asyncio.run(main())
 """
@@ -22,17 +26,17 @@ Usage
 from __future__ import annotations
 
 import asyncio
-import json
 import re
-import tempfile
 from pathlib import Path
 from typing import Optional, Union
 
-import phasma.browser as _browser
+from mmdc.engine import Engine, MermaidRenderError
+from mmdc.png_decode import decode_png
+from mmdc.raster import render_png
+from mmdc.pdf_writer import png_to_pdf
 
 # Assets bundled inside the package
 _ASSETS_DIR = Path(__file__).parent / "assets"
-_RENDER_HTML = _ASSETS_DIR / "render.html"
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -47,8 +51,7 @@ def _read_input(source: Union[str, Path]) -> str:
     return source  # raw mermaid string
 
 
-
-def _parse_svg_dimensions(svg_text: str):
+def _parse_svg_dimensions(svg_text):
     """
     Extract width/height from SVG string.
     Falls back to viewBox if width/height are missing or non-numeric (e.g. "100%").
@@ -77,7 +80,6 @@ def _parse_svg_dimensions(svg_text: str):
     w = _attr_int("width")
     h = _attr_int("height")
 
-    # fallback: parse viewBox="x y w h"
     if w is None or h is None:
         vb = re.search(r'viewBox\s*=\s*["\']([^"\']+)["\']', tag)
         if vb:
@@ -96,7 +98,7 @@ def _parse_svg_dimensions(svg_text: str):
 
 class MermaidConverter:
     """
-    Persistent Mermaid diagram converter backed by a single PhantomJS process.
+    Persistent Mermaid diagram converter backed by a single QuickJS context.
 
     Use as an async context manager (recommended):
 
@@ -122,25 +124,22 @@ class MermaidConverter:
         """
         self._default_theme = theme
         self._default_background = background
-        self._browser: Optional[_browser.Browser] = None
-        self._page: Optional[_browser.Page] = None
+        self._engine: Optional[Engine] = None
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> "MermaidConverter":
-        """Launch PhantomJS and load the Mermaid render page."""
-        self._browser = await _browser.launch()
-        self._page = await self._browser.new_page()
-        # load the bundled render.html (includes mermaid.min.js offline)
-        await self._page.goto(_RENDER_HTML.as_uri(), wait_ms=200)
+        """Start the embedded JS engine and load mermaid.js."""
+        engine = Engine()
+        await asyncio.to_thread(engine.start)
+        self._engine = engine
         return self
 
     async def close(self) -> None:
-        """Shut down the PhantomJS process."""
-        if self._browser:
-            await self._browser.close()
-            self._browser = None
-            self._page = None
+        """Shut down the embedded JS engine."""
+        if self._engine is not None:
+            await asyncio.to_thread(self._engine.close)
+            self._engine = None
 
     async def __aenter__(self) -> "MermaidConverter":
         return await self.start()
@@ -157,28 +156,14 @@ class MermaidConverter:
         config: Optional[dict],
         css: Optional[str],
     ) -> str:
-        if self._page is None:
+        if self._engine is None:
             raise RuntimeError(
                 "MermaidConverter is not started. Use 'async with' or call start() first."
             )
-
-        code_json   = json.dumps(code)
-        theme_json  = json.dumps(theme)
-        config_json = json.dumps(config) if config else "null"
-        css_json    = json.dumps(css) if css else '""'
-
-        svg = await self._page.evaluate(f"""
-            (function() {{
-                return window.renderMermaidSync({code_json}, {theme_json}, {config_json}, {css_json});
-            }})()
-        """)
-
-        if not svg:
-            err = await self._page.evaluate(
-                f"window.renderMermaidError({code_json}, {theme_json}, {config_json}, {css_json})"
-            )
-            raise RuntimeError(f"Mermaid rendering failed: {err or 'unknown error'}")
-        return svg
+        try:
+            return await asyncio.to_thread(self._engine.render_svg, code, theme, config, css)
+        except MermaidRenderError as e:
+            raise RuntimeError(f"Mermaid rendering failed: {e}") from e
 
     async def _render(
         self,
@@ -198,64 +183,39 @@ class MermaidConverter:
         theme      = theme      or self._default_theme
         background = background or self._default_background
 
-        if self._page is None:
+        if self._engine is None:
             raise RuntimeError(
                 "MermaidConverter is not started. Use 'async with' or call start() first."
             )
 
+        svg = await self._render_svg(code, theme, config, css)
+
         if fmt == "svg":
-            svg = await self._render_svg(code, theme, config, css)
             data = svg.encode("utf-8")
             if output:
                 Path(output).write_bytes(data)
             return data
 
-        # PNG / PDF — inject SVG directly into the page DOM, then screenshot/pdf.
-        # Single PhantomJS process — no SvgRenderer needed.
-        code_json   = json.dumps(code)
-        theme_json  = json.dumps(theme)
-        config_json = json.dumps(config) if config else "null"
-        css_json    = json.dumps(css) if css else '""'
-        bg_json     = json.dumps(background)
+        svg_bytes = svg.encode("utf-8")
 
-        dims = await self._page.evaluate(f"""
-            (function() {{
-                return window.renderMermaidToPage(
-                    {code_json}, {theme_json}, {config_json},
-                    {css_json}, {bg_json}, {scale}
-                );
-            }})()
-        """)
-
-        if not dims or "error" in dims:
-            msg = dims.get("error") if dims else "unknown"
-            raise RuntimeError(f"Mermaid rendering failed: {msg}")
-
-        w = int(dims["width"])
-        h = int(dims["height"])
-        await self._page.set_viewport_size(w, h)
+        if fmt == "png":
+            data = await asyncio.to_thread(render_png, svg, scale=scale, background=background)
+        elif fmt == "pdf":
+            # Render at the target resolution directly (rather than rendering at
+            # 1x and stretching in the PDF page), so `scale` actually improves
+            # sharpness instead of just blowing up the same pixels.
+            png_bytes = await asyncio.to_thread(render_png, svg, scale=scale, background=background)
+            decoded = await asyncio.to_thread(decode_png, png_bytes)
+            data = await asyncio.to_thread(
+                png_to_pdf,
+                decoded, pdf_format=pdf_format, landscape=pdf_landscape,
+                margin=pdf_margin, scale=1.0, background_color=background,
+            )
+        else:
+            raise ValueError(f"Unsupported format: {fmt!r}")
 
         if output:
-            out_path = Path(output)
-        else:
-            suffix = ".pdf" if fmt == "pdf" else ".png"
-            tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-            tmp.close()
-            out_path = Path(tmp.name)
-
-        if fmt == "pdf":
-            if pdf_format is None:
-                data = await self._page.pdf(
-                    out_path, width=f"{w}px", height=f"{h}px", margin=pdf_margin,
-                )
-            else:
-                data = await self._page.pdf(
-                    out_path, format=pdf_format,
-                    landscape=pdf_landscape, margin=pdf_margin,
-                )
-        else:
-            data = await self._page.screenshot(out_path)
-
+            Path(output).write_bytes(data)
         return data
 
     # ── public API ────────────────────────────────────────────────────────────
@@ -308,7 +268,7 @@ class MermaidConverter:
         ----------
         source:     Mermaid string, file path string, or Path object.
         output:     Optional file path to write the result.
-        scale:      Size multiplier (e.g. 2.0 for 2× resolution).
+        scale:      Size multiplier (e.g. 2.0 for 2x resolution).
         theme:      Mermaid theme override.
         background: CSS background color.
         config:     Mermaid config dict.
@@ -343,14 +303,14 @@ class MermaidConverter:
         ----------
         source:         Mermaid string, file path string, or Path object.
         output:         Optional file path to write the result.
-        scale:          Size multiplier.
+        scale:          Size multiplier (applies only when pdf_format is None).
         theme:          Mermaid theme override.
         background:     CSS background color.
         config:         Mermaid config dict.
         css:            Inline CSS.
         pdf_format:     Paper format e.g. "A4", "Letter". None (default) = fit to diagram.
         pdf_landscape:  Landscape orientation.
-        pdf_margin:     CSS margin e.g. "1cm" (default: "0").
+        pdf_margin:     CSS-style margin e.g. "1cm" (default: "0").
 
         Returns PDF bytes.
         """
@@ -415,7 +375,7 @@ def _get_default() -> MermaidConverter:
 def _shutdown_default() -> None:
     """Called at interpreter exit — closes the singleton if it was started."""
     global _default
-    if _default is not None and _default._browser is not None:
+    if _default is not None and _default._engine is not None:
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
@@ -433,7 +393,7 @@ _atexit.register(_shutdown_default)
 async def _ensure_started() -> MermaidConverter:
     """Return the singleton, starting it on first use."""
     m = _get_default()
-    if m._browser is None:
+    if m._engine is None:
         await m.start()
     return m
 

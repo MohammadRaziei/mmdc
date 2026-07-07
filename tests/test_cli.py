@@ -11,6 +11,7 @@ Strategy:
 from __future__ import annotations
 
 import json
+import re
 import struct
 import subprocess
 import sys
@@ -70,7 +71,7 @@ def test_help():
 def test_info():
     r = run("--info")
     assert r.returncode == 0
-    assert "mermaid" in r.stdout
+    assert re.match(r"^v?\d+\.\d+\.\d+", r.stdout.strip())
 
 
 def test_no_args_exits_nonzero():
