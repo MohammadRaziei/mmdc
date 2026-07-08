@@ -4,26 +4,29 @@
 [![Python](https://img.shields.io/pypi/pyversions/mmdc.svg)](https://pypi.org/project/mmdc)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://github.com/MohammadRaziei/mmdc/actions/workflows/wheel.yml/badge.svg)](https://github.com/MohammadRaziei/mmdc/actions/workflows/wheel.yml)
+[![GitHub stars](https://img.shields.io/github/stars/MohammadRaziei/mmdc?style=social)](https://github.com/MohammadRaziei/mmdc/stargazers)
 
 <div align="center">
 <img src="https://raw.githubusercontent.com/MohammadRaziei/mmdc/master/docs/static/img/logo.svg" width="150pt"/>
 </div>
 
-Convert Mermaid diagrams to SVG, PNG, and PDF — **fully offline and fast, just `pip install mmdc`**.
+Convert Mermaid diagrams to SVG, PNG, PDF, or ASCII art — **fully offline and fast, just `pip install mmdc`**.
 
-No Node.js. No npm. No Chrome. No system packages. Mermaid v11 runs inside a small embedded JS engine (QuickJS-ng), and every raster/PDF conversion goes through [resvg](https://github.com/RazrFalcon/resvg) — no Pillow, no Cairo, nothing to compile.
+**Completely browserless.** No Node.js, no npm, no Chrome, no system packages, nothing to compile. And because there's no browser to boot, `mmdc` renders noticeably faster than the official `mermaid-cli`, which drives a real headless Chrome through Puppeteer for every single diagram — `mmdc` uses a fast, embedded JS engine instead.
 
 ```bash
 pip install mmdc
 ```
 
+That's it — SVG, PNG, PDF, and ASCII output all work out of the box; nothing else to install.
+
 ---
 
 ## Why mmdc?
 
-The official Mermaid CLI (`@mermaid-js/mermaid-cli`) drives a real headless Chrome via Puppeteer. That works, but it's slow to start, heavy to install (~170MB+ of Chromium), and awkward to embed in a pipeline.
+The official Mermaid CLI (`@mermaid-js/mermaid-cli`) works by spinning up a real headless Chrome via Puppeteer for every render. That works, but a full browser is slow to start and heavy to install (~170MB+ of Chromium), which shows up directly in wall-clock time — especially in CI pipelines rendering many diagrams, or anything short-lived like a serverless function.
 
-`mmdc` renders the actual, current Mermaid v11 JS library — not a reimplementation, not a subset — inside QuickJS-ng, a ~7MB embedded JS engine. Real text metrics (which a fake DOM can't fabricate on its own) come from a bundled font read directly via a small pure-Python TTF parser, and that *same* font is handed to resvg for final rendering — so layout and paint always agree, by construction.
+`mmdc` renders the actual, current Mermaid v11 JS library — not a reimplementation, not a subset — but runs it inside a small embedded JavaScript engine instead of a browser. No browser process to spawn, no page to load, no DOM to boot — just the JS engine running Mermaid's own layout code directly. That's the whole speed difference in one sentence: **browser vs. no browser.**
 
 ---
 
@@ -42,6 +45,7 @@ graph TD
 d.save("diagram.svg")
 d.save("diagram.png", scale=2.0)
 d.save("diagram.pdf", pdf_format="A4")
+print(d.ascii())
 ```
 
 ```bash
@@ -72,6 +76,7 @@ Everything happens in one process, no subprocess, no I/O:
 - **SVG** — mermaid.js runs inside QuickJS-ng against a minimal fake DOM/SVG implementation. The one thing a fake DOM can't fabricate — real text metrics (`getBBox`/`getComputedTextLength`) — is bridged back into Python, which reads real glyph widths from a bundled font.
 - **PNG** — the SVG is rasterized by [resvg](https://pypi.org/project/resvg_py/), forced to use that *same* bundled font, so what mermaid measured during layout is exactly what gets painted.
 - **PDF** — a small hand-written PDF writer (stdlib `zlib`/`struct` only) embeds the rendered pixels directly. No Pillow, no Cairo, no reportlab — every mainstream "put an image in a PDF" library pulls in Pillow as a transitive dependency; this avoids that entirely.
+- **ASCII** — a completely separate, lightweight path via [termaid](https://pypi.org/project/termaid/) (pure Python, ~700KB, zero dependencies), which parses the Mermaid source itself rather than going through the SVG.
 
 Rendering is CPU-bound, synchronous, single-process — there's no browser or subprocess to wait on, so there's nothing for `async` to usefully overlap. See [`mmdc.render_many()`](#parallel-batch-rendering) below for real parallelism instead.
 
@@ -84,26 +89,39 @@ Rendering is CPU-bound, synchronous, single-process — there's no browser or su
 ```python
 import mmdc
 
-d = mmdc.render("flowchart LR; A-->B-->C")   # SVG is rendered immediately
+d = mmdc.render("flowchart LR; A-->B-->C")
 ```
 
-`Diagram` methods — SVG is already computed; everything else is derived from it on demand:
+`render()` itself does nothing but store the source — every `Diagram` method below is **lazy and cached**: nothing is computed until you call it, and calling it again with the same arguments returns the memoized result instead of recomputing.
 
 | Method | Returns | Notes |
 |---|---|---|
-| `.svg()` | `str` | Already computed at `render()` time |
+| `.svg()` | `str` | Computed on first call, cached after |
 | `.png(width?, height?, scale?, background?)` | `bytes` | Aspect ratio always preserved |
 | `.pdf(pdf_format?, pdf_landscape?, pdf_margin?, width?, height?, scale?, background?)` | `bytes` | `pdf_format=None` (default) fits the page to the diagram |
+| `.ascii(**opts)` | `str` | Renders straight from the Mermaid source, doesn't need `.svg()` first |
 | `.raw(width?, height?, background?)` | `(bytes, w, h)` | Raw RGBA8888, no imaging library involved |
 | `.numpy(width?, height?, background?)` | `np.ndarray` | `(H, W, 4)` uint8; requires `numpy` |
-| `.save(path, ...)` | `None` | Format inferred from the extension: `.svg` / `.png` / `.pdf` |
+| `.save(path, format=None, ...)` | `None` | Format from `format=`, or inferred from the extension otherwise |
 | `._repr_svg_()` | `str` | Automatic inline rendering in Jupyter/IPython |
 
 ```python
+d.svg() is d.svg()      # True -- second call is a cache hit, not a re-render
 d.png(width=1200, background="#ffffff")
 d.raw()                 # (bytes, width, height) -- RGBA8888
 d.numpy()                # np.ndarray, no Pillow needed
+d.ascii()                # ASCII/Unicode box-drawing art
 d.save("out.pdf", pdf_format="A4", pdf_margin="1cm")
+```
+
+### `save()`: format from the extension, or forced explicitly
+
+```python
+d.save("out.svg")                       # -> svg
+d.save("out.png")                       # -> png
+d.save("out.pdf")                       # -> pdf
+d.save("out.txt")                       # -> ascii
+d.save("out.whatever", format="png")    # force a format regardless of extension
 ```
 
 ### Themes, config, CSS
@@ -126,22 +144,19 @@ for d, name in zip(diagrams, output_names):
 
 Each worker process starts its own persistent engine once and reuses it for every diagram routed to it.
 
-### ASCII / terminal output (optional)
+### ASCII / terminal output
 
-```bash
-pip install mmdc[ascii]
-```
+Works out of the box — [termaid](https://pypi.org/project/termaid/) (pure Python, ~700KB, zero dependencies of its own) is a core dependency, not an optional extra:
 
 ```python
 print(mmdc.render_ascii("graph LR; A-->B-->C"))
+# or, equivalently: mmdc.render("graph LR; A-->B-->C").ascii()
 ```
 ```
 ┌───┐    ┌───┐    ┌───┐
 │ A ├───►│ B ├───►│ C │
 └───┘    └───┘    └───┘
 ```
-
-Backed by [termaid](https://pypi.org/project/termaid/) — pure Python, zero dependencies.
 
 ### Low-level utilities
 
@@ -219,7 +234,7 @@ pie charts, git graphs, and more.
 ## Requirements
 
 - Python 3.9+
-- `quickjs-ng`, `resvg_py` (installed automatically)
+- `quickjs-ng`, `resvg_py`, `termaid` (installed automatically)
 - No system packages, no Node.js, no npm, no browser
 
 ---
@@ -230,6 +245,16 @@ pie charts, git graphs, and more.
 pip install -e ".[test]"
 pytest tests/ -v
 ```
+
+`tests/test_online_comparison.py` structurally cross-checks output against [mermaid.ink](https://mermaid.ink) (labels + aspect ratio, not pixel-diffing — two different rendering engines never match pixel-for-pixel). It needs outbound internet access and skips itself gracefully if that's unavailable or the service returns a transient error.
+
+---
+
+## Acknowledgments
+
+- [Mermaid](https://github.com/mermaid-js/mermaid) — the actual diagramming library this project renders. `mmdc` wouldn't exist without it; all it does is run the real thing somewhere a browser can't go.
+- [mmdr](https://github.com/mohammadraziei/mmdr) — a native-Rust Mermaid renderer by the same author, usable as an additional backend here (see [Additional backends](#additional-backends-optional)).
+- [termaid](https://pypi.org/project/termaid/) — powers ASCII/Unicode terminal output.
 
 ---
 
@@ -245,6 +270,8 @@ pytest tests/ -v
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
+
+If `mmdc` saves you from booting a headless Chrome instance a hundred times in CI, consider leaving a ⭐ on the repo — it genuinely helps others find the project.
 
 ---
 

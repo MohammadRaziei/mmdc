@@ -230,11 +230,7 @@ class Diagram:
         )
 
     def ascii(self, **opts) -> str:
-        """Return the diagram as ASCII/Unicode box-drawing art.
-
-        Requires the optional ``termaid`` package::
-
-            pip install mmdc[ascii]
+        """Return the diagram as ASCII/Unicode box-drawing art (via termaid).
 
         Rendered straight from the Mermaid source (termaid has its own
         parser -- it doesn't go through the SVG at all), so it's available

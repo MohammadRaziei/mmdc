@@ -14,7 +14,7 @@ mmdc — Mermaid diagram rendering, no browser, Node.js, or npm required.
 
     mmdc.backends()          # ['js']  (+ mmdr's backends if installed)
     mmdc.render_many(sources, workers=4)   # real parallelism (multiprocessing)
-    mmdc.render_ascii(source)              # terminal-friendly text, needs mmdc[ascii]
+    mmdc.render_ascii(source)              # terminal-friendly text (always available)
 """
 
 from .__about__ import __version__

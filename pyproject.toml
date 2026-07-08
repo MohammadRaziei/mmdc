@@ -24,15 +24,15 @@ classifiers = [
 dependencies = [
     "quickjs-ng>=0.15.1",
     "resvg_py>=0.3.2",
+    "termaid>=0.7.1",
 ]
 
 [project.optional-dependencies]
 test = [
   "pytest-cov"
 ]
-rust  = [ "mmdr" ]
-ascii = [ "termaid" ]
-all   = [ "mmdr", "termaid", "numpy" ]
+rust = [ "mmdr" ]
+all  = [ "mmdr", "numpy" ]
 
 [project.scripts]
 mmdc = "mmdc.__main__:main"

@@ -85,24 +85,14 @@ def test_pdf_fully_supported_unlike_mmdr():
 # ── ascii ─────────────────────────────────────────────────────────────────
 
 def test_ascii_method_exists_on_diagram():
-    pytest.importorskip("termaid")
     d = mmdc.render(FLOWCHART)
     art = d.ascii()
     assert isinstance(art, str) and art.strip()
 
 
 def test_ascii_is_cached():
-    pytest.importorskip("termaid")
     d = mmdc.render(FLOWCHART)
     assert d.ascii() is d.ascii()
-
-
-def test_ascii_without_termaid_raises_clear_error(monkeypatch):
-    import sys
-    monkeypatch.setitem(sys.modules, "termaid", None)
-    d = mmdc.render(FLOWCHART)
-    with pytest.raises(ImportError, match=r"mmdc\[ascii\]"):
-        d.ascii()
 
 
 # ── save() ────────────────────────────────────────────────────────────────
@@ -119,10 +109,9 @@ def test_save_all_formats(tmp_path):
 
 
 def test_save_ascii_by_extension(tmp_path):
-    pytest.importorskip("termaid")
     out = tmp_path / "d.txt"
     mmdc.render(FLOWCHART).save(str(out))
-    assert out.read_text(encoding="utf-8").strip()
+    assert out.read_text().strip()
 
 
 def test_save_format_override_ignores_extension(tmp_path):

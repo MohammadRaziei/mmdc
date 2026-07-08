@@ -22,6 +22,7 @@ from __future__ import annotations
 import base64
 import re
 import socket
+import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -58,18 +59,30 @@ def _mermaid_ink_b64(code: str) -> str:
 
 
 def _fetch(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "mmdc-test-suite"})
-    with urllib.request.urlopen(req, timeout=MERMAID_INK_TIMEOUT) as resp:
-        return resp.read()
+    """GET url, retrying transient failures a couple of times before giving
+    up. If it still fails, skip (not fail) the calling test -- mermaid.ink
+    is a free public service and does occasionally return 503s or rate-limit
+    shared CI IP ranges; that's not something mmdc's test suite should be
+    red over."""
+    last_error = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; mmdc-test-suite)"})
+            with urllib.request.urlopen(req, timeout=MERMAID_INK_TIMEOUT) as resp:
+                return resp.read()
+        except (urllib.error.URLError, socket.timeout, ConnectionError, TimeoutError) as e:
+            last_error = e
+            if attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+    pytest.skip(f"mermaid.ink not reachable after retries: {last_error}")
 
 
 @pytest.fixture(scope="module")
 def _require_mermaid_ink():
-    """Skip the whole module if mermaid.ink isn't reachable from here."""
-    try:
-        _fetch("https://mermaid.ink/svg/" + _mermaid_ink_b64("graph LR\nA-->B"))
-    except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout, ConnectionError) as e:
-        pytest.skip(f"mermaid.ink not reachable: {e}")
+    """Skip the whole module if mermaid.ink isn't reachable from here
+    (_fetch already retries and skips on failure; this just does it once
+    up front so a dead service skips the whole file instead of every test)."""
+    _fetch("https://mermaid.ink/svg/" + _mermaid_ink_b64("info"))
 
 
 def _svg_texts(svg_bytes_or_str) -> list[str]:
