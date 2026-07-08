@@ -122,7 +122,7 @@ def test_save_ascii_by_extension(tmp_path):
     pytest.importorskip("termaid")
     out = tmp_path / "d.txt"
     mmdc.render(FLOWCHART).save(str(out))
-    assert out.read_text().strip()
+    assert out.read_text(encoding="utf-8").strip()
 
 
 def test_save_format_override_ignores_extension(tmp_path):
