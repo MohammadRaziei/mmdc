@@ -1,13 +1,11 @@
 """
 mmdc.diagram — the object returned by mmdc.render().
 
-Mirrors the API of mmdr (https://github.com/mohammadraziei/mmdr) so the two
-packages are interchangeable: same .svg()/.png()/.raw()/.numpy()/.save()
-shape, same _repr_svg_() for notebooks. Unlike mmdr, SVG is rendered
-*eagerly* in render() — Mermaid's own layout step has to run regardless of
-which output format you ultimately want, so there's nothing meaningful to
-defer there. PNG / raw / numpy / PDF conversions are computed lazily, only
-when you actually call them, straight from the cached SVG via resvg.
+Mirrors the API of mmdr (https://github.com/mohammadraziei/mmdr): same
+.svg()/.png()/.raw()/.numpy()/.save() shape, same _repr_svg_() for
+notebooks. Every method here is lazy *and* cached: nothing is computed
+until you call it, and calling it again with the same arguments returns
+the memoized result instead of recomputing.
 """
 
 from __future__ import annotations
@@ -16,6 +14,7 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from mmdc.ascii import render_ascii
 from mmdc.engine import Engine, MermaidRenderError
 from mmdc.pdf_writer import png_to_pdf
 from mmdc.png_decode import decode_png_rgba, decode_png
@@ -44,12 +43,15 @@ def _get_engine() -> Engine:
     return _engine
 
 
+_MISSING = object()
+
+
 class Diagram:
     """A rendered Mermaid diagram (the 'js' backend — see mmdc.render()).
 
-    SVG is rendered immediately when the Diagram is created. Everything
-    else (PNG, raw pixels, numpy, PDF) is derived from that cached SVG on
-    demand.
+    Every method is lazy and cached: nothing runs until you call it, and
+    calling it again with the same arguments returns the memoized result
+    rather than recomputing.
 
     Example::
 
@@ -57,14 +59,17 @@ class Diagram:
 
         d = mmdc.render("flowchart LR; A-->B-->C")
 
-        d.svg()                          # str (already computed)
+        d.svg()                          # str -- computed on first call
+        d.svg() is d.svg()               # True -- cached, not recomputed
         d.png()                          # bytes (PNG)
-        d.png(width=1200, background="#ffffff")
+        d.png(width=1200, background="#ffffff")   # a different cache entry
         d.raw()                          # (bytes, width, height) — RGBA8888
         d.numpy()                        # np.ndarray, no Pillow needed
+        d.ascii()                        # str -- needs mmdc[ascii]
         d.save("out.svg")
         d.save("out.png", width=1200)
         d.save("out.pdf", pdf_format="A4", pdf_margin="1cm")
+        d.save("out.png.bak", format="png")   # force format regardless of extension
     """
 
     def __init__(
@@ -80,21 +85,37 @@ class Diagram:
         self._theme = theme
         self._config = config
         self._css = css
-        try:
-            self._svg: str = _get_engine().render_svg(source, theme or "default", config, css)
-        except MermaidRenderError as e:
-            raise RuntimeError(f"Mermaid rendering failed: {e}") from e
+        self._cache: dict = {}
 
     # ------------------------------------------------------------------
-    # SVG — already computed
+    # memoization helper -- keyed by (method name, sorted kwargs)
+    # ------------------------------------------------------------------
+
+    def _cached(self, name: str, kwargs: dict, compute):
+        key = (name, tuple(sorted(kwargs.items())))
+        result = self._cache.get(key, _MISSING)
+        if result is _MISSING:
+            result = compute()
+            self._cache[key] = result
+        return result
+
+    # ------------------------------------------------------------------
+    # SVG — lazy, cached
     # ------------------------------------------------------------------
 
     def svg(self) -> str:
-        """Return the diagram as an SVG string (computed at render() time)."""
-        return self._svg
+        """Return the diagram as an SVG string (rendered once, then cached)."""
+        def _compute():
+            try:
+                return _get_engine().render_svg(
+                    self._source, self._theme or "default", self._config, self._css
+                )
+            except MermaidRenderError as e:
+                raise RuntimeError(f"Mermaid rendering failed: {e}") from e
+        return self._cached("svg", {}, _compute)
 
     # ------------------------------------------------------------------
-    # Rasterization — lazy, via resvg
+    # Rasterization — lazy, cached, via resvg
     # ------------------------------------------------------------------
 
     def png(
@@ -118,10 +139,14 @@ class Diagram:
             If both width and height are given, width wins and height is
             derived from it -- this never stretches the diagram.
         """
-        kwargs = dict(background=background, width=width, height=height)
-        if width is None and height is None and scale is not None:
-            kwargs["scale"] = scale
-        return render_png(self._svg, **kwargs)
+        def _compute():
+            kwargs = dict(background=background, width=width, height=height)
+            if width is None and height is None and scale is not None:
+                kwargs["scale"] = scale
+            return render_png(self.svg(), **kwargs)
+        return self._cached(
+            "png", dict(width=width, height=height, scale=scale, background=background), _compute
+        )
 
     def raw(
         self,
@@ -132,8 +157,12 @@ class Diagram:
     ) -> tuple[bytes, int, int]:
         """Return raw RGBA8888 pixels as ``(bytes, width, height)`` — no
         imaging library involved, just resvg's output decoded directly."""
-        png_bytes = self.png(width=width, height=height, scale=scale, background=background)
-        return decode_png_rgba(png_bytes)
+        def _compute():
+            png_bytes = self.png(width=width, height=height, scale=scale, background=background)
+            return decode_png_rgba(png_bytes)
+        return self._cached(
+            "raw", dict(width=width, height=height, scale=scale, background=background), _compute
+        )
 
     def numpy(
         self,
@@ -150,8 +179,13 @@ class Diagram:
                 "numpy is required for .numpy(). Install it with:\n"
                 "    pip install numpy"
             ) from exc
-        raw, w, h = self.raw(width=width, height=height, scale=scale, background=background)
-        return np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 4)
+
+        def _compute():
+            raw, w, h = self.raw(width=width, height=height, scale=scale, background=background)
+            return np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 4)
+        return self._cached(
+            "numpy", dict(width=width, height=height, scale=scale, background=background), _compute
+        )
 
     def pdf(
         self,
@@ -178,19 +212,42 @@ class Diagram:
             pdf_landscape: Landscape orientation.
             pdf_margin:    CSS-style margin e.g. ``"1cm"`` (only with pdf_format).
         """
-        render_kwargs = dict(background=background, width=width, height=height)
-        if width is None and height is None:
-            render_kwargs["scale"] = scale
-        png_bytes = render_png(self._svg, **render_kwargs)
-        decoded = decode_png(png_bytes)
-        return png_to_pdf(
-            decoded, pdf_format=pdf_format, landscape=pdf_landscape,
-            margin=pdf_margin, scale=1.0, background_color=background,
+        def _compute():
+            render_kwargs = dict(background=background, width=width, height=height)
+            if width is None and height is None:
+                render_kwargs["scale"] = scale
+            png_bytes = render_png(self.svg(), **render_kwargs)
+            decoded = decode_png(png_bytes)
+            return png_to_pdf(
+                decoded, pdf_format=pdf_format, landscape=pdf_landscape,
+                margin=pdf_margin, scale=1.0, background_color=background,
+            )
+        return self._cached(
+            "pdf",
+            dict(width=width, height=height, scale=scale, background=background,
+                 pdf_format=pdf_format, pdf_landscape=pdf_landscape, pdf_margin=pdf_margin),
+            _compute,
         )
+
+    def ascii(self, **opts) -> str:
+        """Return the diagram as ASCII/Unicode box-drawing art.
+
+        Requires the optional ``termaid`` package::
+
+            pip install mmdc[ascii]
+
+        Rendered straight from the Mermaid source (termaid has its own
+        parser -- it doesn't go through the SVG at all), so it's available
+        even if .svg() was never called.
+        """
+        return self._cached("ascii", opts, lambda: render_ascii(self._source, **opts))
 
     # ------------------------------------------------------------------
     # Save
     # ------------------------------------------------------------------
+
+    _EXTENSION_FORMATS = {".svg": "svg", ".png": "png", ".pdf": "pdf",
+                          ".txt": "ascii", ".ascii": "ascii"}
 
     def save(
         self,
@@ -199,29 +256,46 @@ class Diagram:
         height: Optional[float] = None,
         scale: Optional[float] = None,
         background: Optional[str] = None,
-        **pdf_opts,
+        format: Optional[str] = None,
+        **format_opts,
     ) -> None:
-        """Save the diagram to *output*, inferring the format from the extension.
+        """Save the diagram to *output*.
+
+        Args:
+            format: Force the output format ("svg", "png", "pdf", or "ascii")
+                    regardless of the file extension. If omitted (the
+                    default), the format is inferred from *output*'s
+                    extension: ``.svg``, ``.png``, ``.pdf``, or ``.txt``/``.ascii``.
+            **format_opts: Forwarded to the matching method -- pdf_format/
+                    pdf_landscape/pdf_margin for "pdf", any termaid option for "ascii".
 
         Raises:
-            ValueError: if the file extension is not recognised.
+            ValueError: if the format can't be determined, or is unrecognised.
         """
         path = Path(output)
-        suffix = path.suffix.lower()
-
-        if suffix == ".svg":
-            path.write_text(self.svg(), encoding="utf-8")
-        elif suffix == ".png":
-            path.write_bytes(self.png(width=width, height=height, scale=scale, background=background))
-        elif suffix == ".pdf":
-            path.write_bytes(self.pdf(
-                width=width, height=height, scale=scale or 1.0,
-                background=background, **pdf_opts,
-            ))
-        else:
+        fmt = format or self._EXTENSION_FORMATS.get(path.suffix.lower())
+        if fmt is None:
             raise ValueError(
                 f"Cannot infer output format from {output!r}. "
-                "Supported extensions: .svg  .png  .pdf"
+                "Pass format=\"svg\"/\"png\"/\"pdf\"/\"ascii\" explicitly, "
+                "or use one of these extensions: "
+                f"{sorted(set(self._EXTENSION_FORMATS))}"
+            )
+
+        if fmt == "svg":
+            path.write_text(self.svg(), encoding="utf-8")
+        elif fmt == "png":
+            path.write_bytes(self.png(width=width, height=height, scale=scale, background=background))
+        elif fmt == "pdf":
+            path.write_bytes(self.pdf(
+                width=width, height=height, scale=scale or 1.0,
+                background=background, **format_opts,
+            ))
+        elif fmt == "ascii":
+            path.write_text(self.ascii(**format_opts), encoding="utf-8")
+        else:
+            raise ValueError(
+                f"Unknown format {fmt!r}. Supported: svg, png, pdf, ascii"
             )
 
     # ------------------------------------------------------------------
@@ -234,7 +308,7 @@ class Diagram:
 
     def _repr_svg_(self) -> str:
         """Jupyter/IPython rich display — renders inline SVG automatically."""
-        return self._svg
+        return self.svg()
 
 
 def render(source: str, backend: Optional[str] = None, **opts) -> "Diagram":
@@ -252,10 +326,10 @@ def render(source: str, backend: Optional[str] = None, **opts) -> "Diagram":
                  mmdr backends: theme, node_spacing, rank_spacing, aspect_ratio
 
     Returns:
-        A Diagram. SVG is rendered immediately; PNG/raw/numpy/PDF are
-        computed lazily from it on demand. When delegating to an ``mmdr``
-        backend, this returns *mmdr's own* Diagram object directly — its
-        API is identical by design, so no wrapping is needed.
+        A Diagram. Every method (svg/png/raw/numpy/pdf/ascii) is lazy and
+        cached. When delegating to an ``mmdr`` backend, this returns
+        *mmdr's own* Diagram object directly — its API is identical by
+        design, so no wrapping is needed.
     """
     if backend in (None, "js"):
         return Diagram(source, **opts)
