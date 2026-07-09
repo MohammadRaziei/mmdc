@@ -82,7 +82,7 @@ def _require_mermaid_ink():
     """Skip the whole module if mermaid.ink isn't reachable from here
     (_fetch already retries and skips on failure; this just does it once
     up front so a dead service skips the whole file instead of every test)."""
-    _fetch("https://mermaid.ink/svg/" + _mermaid_ink_b64("info"))
+    _fetch("https://mermaid.ink/svg/" + _mermaid_ink_b64("graph LR\nA-->B"))
 
 
 def _svg_texts(svg_bytes_or_str) -> list[str]:

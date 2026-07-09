@@ -173,6 +173,15 @@ def test_render_unknown_backend_without_mmdr_behaves_correctly():
         assert d.svg().startswith("<svg") or d.svg().strip().startswith("<?xml")
 
 
+def test_mmdr_backend_gets_pdf_support_it_doesnt_natively_have():
+    """The whole point of DiagramBase: mmdr's own Diagram.pdf() raises
+    NotImplementedError, but ours reuses our resvg + PDF writer on top of
+    mmdr's svg() -- so PDF export works for mmdr backends too."""
+    pytest.importorskip("mmdr")
+    d = mmdc.render(FLOWCHART, backend="merman")
+    assert d.pdf()[:5] == b"%PDF-"
+
+
 def test_render_unknown_backend_name_raises_value_error():
     pytest.importorskip("mmdr")
     with pytest.raises(ValueError):

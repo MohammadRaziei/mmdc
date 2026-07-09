@@ -80,6 +80,8 @@ Everything happens in one process, no subprocess, no I/O:
 
 Rendering is CPU-bound, synchronous, single-process — there's no browser or subprocess to wait on, so there's nothing for `async` to usefully overlap. See [`mmdc.render_many()`](#parallel-batch-rendering) below for real parallelism instead.
 
+Every backend is a small subclass of one shared `DiagramBase` — `Diagram` for `'js'`, `DiagramRust` for anything from the optional `mmdr` package. Subclasses only override the private `_svg()` hook; the public, cached `svg()`/`png()`/`pdf()`/`raw()`/`numpy()`/`ascii()`/`save()` are all written once in the base class and work identically regardless of which backend produced the SVG.
+
 ---
 
 ## Python API
@@ -176,14 +178,15 @@ raw, w, h = svg_to_raw(svg)
 pip install mmdc[rust]
 ```
 
-If [`mmdr`](https://github.com/mohammadraziei/mmdr) (a native-Rust Mermaid renderer) is installed, its backends become available too — same `Diagram` interface either way:
+If [`mmdr`](https://github.com/mohammadraziei/mmdr) (a native-Rust Mermaid renderer) is installed, its backends become available too — same interface either way, and with a bonus: PDF/raw/numpy work even for backends that don't natively support them (mmdr's own `Diagram.pdf()` raises `NotImplementedError`; `mmdc`'s doesn't, for *any* backend), because every backend shares the same `DiagramBase` — only `svg()` differs per backend, everything downstream of it (PNG/PDF/raw/numpy) is the same resvg + PDF-writer pipeline for all of them:
 
 ```python
 mmdc.backends()
 # ['js']                                   # mmdr not installed
 # ['js', 'merman', 'mermaid-rs-renderer']   # mmdr installed
 
-mmdc.render(source, backend="merman")   # returns mmdr's own Diagram directly
+d = mmdc.render(source, backend="merman")   # svg() comes from mmdr; everything else from mmdc
+d.pdf()                                      # works, even though mmdr's own .pdf() doesn't
 ```
 
 ---
