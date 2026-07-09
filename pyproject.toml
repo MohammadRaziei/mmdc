@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mmdc"
 dynamic = ["version"]
-description = "Python-native Mermaid diagram converter – no browser, Node.js, or npm required. Renders diagrams to SVG/PNG/PDF, perfect for documentation automation and CI/CD pipelines."
+description = "Python-native Mermaid diagram converter – no browser, Node.js, or npm required. Renders diagrams to SVG/PNG/PDF using an embedded QuickJS engine and resvg, perfect for documentation automation and CI/CD pipelines."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
@@ -32,7 +32,7 @@ test = [
   "pytest-cov"
 ]
 rust = [ "mmdr" ]
-all  = [ "mmdr", "numpy" ]
+all  = [ "mmdr" ]
 
 [project.scripts]
 mmdc = "mmdc.__main__:main"

@@ -12,6 +12,8 @@ Examples:
     mmdc -i diagram.mermaid -o diagram.pdf --pdf-format A4
     cat diagram.mermaid | mmdc -i -
     mmdc --info
+    mmdc --list-backends
+    mmdc -i diagram.mermaid --backend merman -o diagram.svg
 """
 
 import argparse
@@ -19,6 +21,7 @@ import json
 import sys
 from pathlib import Path
 
+import mmdc
 from mmdc.diagram import Diagram
 
 
@@ -46,12 +49,19 @@ examples:
   mmdc -i diagram.mermaid -o diagram.svg --theme dark
   cat diagram.mermaid | mmdc -i -
   mmdc --info
+  mmdc --list-backends
+  mmdc -i diagram.mermaid --backend merman -o diagram.svg
         """,
     )
 
-    parser.add_argument("--version", "-V", action="version", version=_get_version())
+    parser.add_argument("--version", "-v", action="version", version=_get_version())
     parser.add_argument("--info", action="store_true",
                         help="Print Mermaid library version and exit")
+    parser.add_argument("--list-backends", action="store_true",
+                        help="List available rendering backends and exit")
+    parser.add_argument("--backend", default=None, metavar="NAME",
+                        help="Rendering backend to use (default: js). "
+                             "See --list-backends for what's available.")
     parser.add_argument("-i", "--input", metavar="FILE",
                         help="Input Mermaid file, or '-' to read from stdin")
     parser.add_argument("-o", "--output", default=None, metavar="FILE",
@@ -69,9 +79,9 @@ examples:
     parser.add_argument("-b", "--background", default=None, metavar="COLOR",
                         help="CSS background color (default: transparent)")
     parser.add_argument("-c", "--config", metavar="FILE",
-                        help="JSON config file for Mermaid")
+                        help="JSON config file for Mermaid (backend='js' only)")
     parser.add_argument("--css", metavar="FILE",
-                        help="CSS file to inject into the diagram")
+                        help="CSS file to inject into the diagram (backend='js' only)")
     parser.add_argument("--pdf-format", default=None, metavar="FORMAT",
                         help="PDF paper format e.g. A4, Letter (default: fit to diagram)")
     parser.add_argument("--landscape", action="store_true",
@@ -88,10 +98,10 @@ def _read_source(input_arg: str) -> str:
     return Path(input_arg).read_text(encoding="utf-8")
 
 
-def _print_info() -> None:
+def _print_info(backend) -> None:
     import xml.etree.ElementTree as ET
 
-    svg_str = Diagram("info").svg()
+    svg_str = mmdc.render("info", backend=backend).svg()
     root = ET.fromstring(svg_str)
     texts = [
         el.text.strip()
@@ -101,12 +111,25 @@ def _print_info() -> None:
     print(" ".join(texts))
 
 
+def _print_backends() -> None:
+    available = mmdc.backends()
+    for name in available:
+        marker = " (default)" if name == "js" else ""
+        print(f"{name}{marker}")
+
+
 def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
+    backend = args.backend or "js"
+
     if args.info:
-        _print_info()
+        _print_info(backend)
+        return
+
+    if args.list_backends:
+        _print_backends()
         return
 
     if not args.input:
@@ -116,7 +139,14 @@ def main() -> None:
     config = json.loads(Path(args.config).read_text(encoding="utf-8")) if args.config else None
     css = Path(args.css).read_text(encoding="utf-8") if args.css else None
 
-    d = Diagram(source, theme=args.theme, config=config, css=css)
+    render_kwargs = {"theme": args.theme}
+    if backend == "js":
+        render_kwargs.update(config=config, css=css)
+    elif config or css:
+        print(f"warning: --config/--css are ignored for backend={backend!r} (only 'js' supports them)",
+              file=sys.stderr)
+
+    d = mmdc.render(source, backend=args.backend, **render_kwargs)
 
     if args.output is None:
         sys.stdout.buffer.write(d.svg().encode("utf-8"))

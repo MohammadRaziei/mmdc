@@ -48,7 +48,7 @@ def test_version():
 
 
 def test_short_version():
-    r = run("-V")
+    r = run("-v")
     assert r.stdout.strip() == run("--version").stdout.strip()
 
 
@@ -296,3 +296,20 @@ def test_e2e_css_file(tmp_path):
     r = run("-i", str(BASIC_MERMAID), "--css", str(css_path))
     assert r.returncode == 0
     assert r.stdout.lstrip().startswith("<svg")
+
+
+# ── backends / verbose ────────────────────────────────────────────────────
+
+def test_list_backends():
+    r = run("--list-backends")
+    assert r.returncode == 0
+    lines = r.stdout.strip().splitlines()
+    assert any(line.startswith("js") for line in lines)
+    assert any("(default)" in line for line in lines)
+
+
+def test_backend_js_explicit(tmp_path):
+    out = tmp_path / "out.svg"
+    r = run("-i", str(BASIC_MERMAID), "-o", str(out), "--backend", "js")
+    assert r.returncode == 0
+    assert out.read_bytes().lstrip().startswith(b"<svg")

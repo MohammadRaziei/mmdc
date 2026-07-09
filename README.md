@@ -217,8 +217,14 @@ mmdc -i diagram.mermaid -o diagram.svg --config config.json --css style.css
 # info — Mermaid library version
 mmdc --info
 
+# list available backends
+mmdc --list-backends
+
+# pick a backend explicitly (requires mmdc[rust] for anything but 'js')
+mmdc -i diagram.mermaid -o diagram.svg --backend merman
+
 # version
-mmdc --version
+mmdc --version   # or -v
 ```
 
 ---
