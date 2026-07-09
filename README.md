@@ -10,6 +10,17 @@
 <img src="https://raw.githubusercontent.com/MohammadRaziei/mmdc/master/docs/static/img/logo.svg" width="150pt"/>
 </div>
 
+
+> **⚠️ DEPRECATION NOTICE**
+> This project has been renamed to **[mermaidx](https://github.com/MohammadRaziei/mermaidx)**.
+>
+> All future development, bug fixes, and new features will take place in the new repository. Please update your dependencies to use the new package.
+> 
+> *   **New Repository:** [https://github.com/MohammadRaziei/mermaidx](https://github.com/MohammadRaziei/mermaidx)
+> *   **New PyPI Package:** `pip install mermaidx`
+>
+> The `mmdc` package will no longer be updated. Thank you for your support!
+
 Convert Mermaid diagrams to SVG, PNG, PDF, or ASCII art — **fully offline and fast, just `pip install mmdc`**.
 
 **Completely browserless.** No Node.js, no npm, no Chrome, no system packages, nothing to compile. And because there's no browser to boot, `mmdc` renders noticeably faster than the official `mermaid-cli`, which drives a real headless Chrome through Puppeteer for every single diagram — `mmdc` uses a fast, embedded JS engine instead.

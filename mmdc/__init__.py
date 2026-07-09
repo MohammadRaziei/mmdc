@@ -24,6 +24,16 @@ from .raster import svg_to_png, svg_to_raw
 from .pool import render_many
 from .ascii import render_ascii
 
+import warnings
+
+warnings.warn(
+    "The package 'mmdc' has been renamed to 'mermaidx'. "
+    "Please update your dependencies to use 'mermaidx' instead. "
+    "This package will no longer be maintained.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
 __all__ = [
     "__version__",
     "render",
