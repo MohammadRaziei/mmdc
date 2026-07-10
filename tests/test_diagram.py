@@ -103,7 +103,7 @@ def test_save_all_formats(tmp_path):
     d.save(str(svg_path))
     d.save(str(png_path))
     d.save(str(pdf_path))
-    assert svg_path.read_text().startswith("<svg")
+    assert svg_path.read_text(encoding="utf-8").startswith("<svg")
     assert png_path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
     assert pdf_path.read_bytes()[:5] == b"%PDF-"
 
@@ -111,14 +111,14 @@ def test_save_all_formats(tmp_path):
 def test_save_ascii_by_extension(tmp_path):
     out = tmp_path / "d.txt"
     mermaidx.render(FLOWCHART).save(str(out))
-    assert out.read_text().strip()
+    assert out.read_text(encoding="utf-8").strip()
 
 
 def test_save_format_override_ignores_extension(tmp_path):
     """save(..., format=...) forces the format regardless of the file extension."""
     out = tmp_path / "d.whatever"
     mermaidx.render(FLOWCHART).save(str(out), format="svg")
-    assert out.read_text().startswith("<svg")
+    assert out.read_text(encoding="utf-8").startswith("<svg")
 
 
 def test_save_format_override_png_with_odd_extension(tmp_path):
