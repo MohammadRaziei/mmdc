@@ -1,5 +1,5 @@
 """
-mmdc.ascii — ASCII/Unicode terminal rendering.
+mermaidx.ascii — ASCII/Unicode terminal rendering.
 
 Backed by termaid (https://pypi.org/project/termaid/): pure Python, ~700KB,
 zero dependencies of its own -- small enough next to quickjs-ng/resvg that

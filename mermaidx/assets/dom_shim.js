@@ -313,7 +313,7 @@ globalThis.self = globalThis;
 globalThis.addEventListener = () => {};
 globalThis.removeEventListener = () => {};
 globalThis.dispatchEvent = () => true;
-globalThis.navigator = { userAgent: "mmdc-quickjs" };
+globalThis.navigator = { userAgent: "mermaidx-quickjs" };
 globalThis.getComputedStyle = (el) => el.style;
 globalThis.requestAnimationFrame = (fn) => { fn(0); return 0; };
 globalThis.cancelAnimationFrame = () => {};

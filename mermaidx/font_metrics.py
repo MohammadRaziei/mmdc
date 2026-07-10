@@ -1,5 +1,5 @@
 """
-mmdc.font_metrics — just enough of the TrueType/OpenType spec to answer one
+mermaidx.font_metrics — just enough of the TrueType/OpenType spec to answer one
 question: "how wide is this string, in this font, at this size?"
 
 This intentionally does NOT use fontTools (a real, excellent library — but

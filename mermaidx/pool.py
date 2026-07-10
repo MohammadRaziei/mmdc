@@ -1,5 +1,5 @@
 """
-mmdc.pool — parallel batch rendering.
+mermaidx.pool — parallel batch rendering.
 
 Rendering a Mermaid diagram is pure CPU-bound work (parsing + layout inside
 QuickJS): no I/O, nothing to wait on. That rules out asyncio/threads as a
@@ -51,7 +51,7 @@ def render_many(
 
     Example::
 
-        diagrams = mmdc.render_many([src1, src2, src3], theme="dark")
+        diagrams = mermaidx.render_many([src1, src2, src3], theme="dark")
         for d, name in zip(diagrams, ["a.svg", "b.svg", "c.svg"]):
             d.save(name)
     """

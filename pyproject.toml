@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mmdc"
+name = "mermaidx"
 dynamic = ["version"]
-description = "A pure Python library to render Mermaid diagrams to SVG, PNG, and PDF without Node.js, npm, or any external browser dependencies. Built with a high-performance embedded engine, it’s designed for seamless documentation automation and robust CI/CD pipelines."
+description = "Python-native Mermaid diagram converter – no browser, Node.js, or npm required. Renders diagrams to SVG/PNG/PDF using an embedded QuickJS engine and resvg, perfect for documentation automation and CI/CD pipelines."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
@@ -35,19 +35,19 @@ rust = [ "mmdr" ]
 all  = [ "mmdr", "numpy" ]
 
 [project.scripts]
-mmdc = "mmdc.__main__:main"
+mermaidx = "mermaidx.__main__:main"
 
 [project.urls]
-Source = "https://github.com/mohammadraziei/mmdc"
-Issues = "https://github.com/mohammadraziei/mmdc/issues"
-Documentation = "https://mohammadraziei.github.io/mmdc" 
+Source = "https://github.com/mohammadraziei/mermaidx"
+Issues = "https://github.com/mohammadraziei/mermaidx/issues"
+Documentation = "https://mohammadraziei.github.io/mermaidx" 
 
 
 [tool.hatch.version]
-path = "mmdc/__about__.py"
+path = "mermaidx/__about__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["mmdc"]
+packages = ["mermaidx"]
 
 [tool.hatch.envs.default]
 dependencies = [
@@ -78,7 +78,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.lint.scripts]
-typing = "mypy --install-types --non-interactive {args:mmdc tests}"
+typing = "mypy --install-types --non-interactive {args:mermaidx tests}"
 style = [
   "ruff check {args:.}",
   "black --check --diff {args:.}",
@@ -156,7 +156,7 @@ unfixable = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["mmdc"]
+known-first-party = ["mermaidx"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -167,16 +167,16 @@ ban-relative-imports = "all"
 "__init__.py" = ["F401"]
 
 [tool.coverage.run]
-source_pkgs = ["mmdc"]
+source_pkgs = ["mermaidx"]
 branch = true
 parallel = true
 omit = [
-  "mmdc/__about__.py",
+  "mermaidx/__about__.py",
 ]
 
 
 [tool.coverage.paths]
-mmdc = ["mmdc"]
+mermaidx = ["mermaidx"]
 tests = ["tests"]
 
 [tool.coverage.report]

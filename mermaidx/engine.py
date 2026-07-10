@@ -1,5 +1,5 @@
 """
-mmdc.engine — headless Mermaid → SVG rendering without a browser.
+mermaidx.engine — headless Mermaid → SVG rendering without a browser.
 
 Architecture
 ------------
@@ -10,9 +10,9 @@ which lacks class static blocks used by mermaid's dependencies).
 Since QuickJS has no DOM, a minimal fake DOM/SVG implementation is loaded
 first (assets/dom_shim.js). The one piece a fake DOM cannot fabricate on its
 own — real text metrics (`getBBox` / `getComputedTextLength`) — is bridged
-back into Python, where mmdc.font_metrics reads real glyph advance widths
+back into Python, where mermaidx.font_metrics reads real glyph advance widths
 from a bundled font file (DejaVu Sans). The same font file is handed to
-resvg for final rendering (see mmdc.py), so the layout mermaid computes
+resvg for final rendering (see mermaidx.py), so the layout mermaid computes
 always matches what actually gets painted — by construction, not by luck.
 
 A dedicated single-thread executor owns the QuickJS context, since QuickJS
@@ -31,7 +31,7 @@ from typing import Optional
 
 import quickjs
 
-from mmdc.font_metrics import get_font
+from mermaidx.font_metrics import get_font
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 _DOM_SHIM_JS = _ASSETS_DIR / "dom_shim.js"
@@ -45,9 +45,9 @@ class MermaidRenderError(RuntimeError):
 
 
 class _TextMeasurer:
-    """Real font metrics via mmdc.font_metrics (bundled DejaVu Sans) —
+    """Real font metrics via mermaidx.font_metrics (bundled DejaVu Sans) —
     the same font file resvg is told to use for final rendering, so layout
-    and paint always agree (see Engine._init_context / mmdc.py)."""
+    and paint always agree (see Engine._init_context / mermaidx.py)."""
 
     def width(self, text, size, family, weight, style) -> float:
         return get_font(weight).measure(text or "", float(size or 16))["width"]
@@ -91,7 +91,7 @@ class Engine:
     def start(self) -> None:
         if self._executor is not None:
             return
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mmdc-engine")
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mermaidx-engine")
         self._executor.submit(self._init_context).result()
 
     def close(self) -> None:
@@ -115,7 +115,7 @@ class Engine:
         # Python (needed constantly for text measurement) while a time limit
         # is active. Runaway scripts are bounded instead by the job-pump cap.
 
-        ctx.add_callable("__log_raw", lambda s: print(f"[mmdc/js] {s}", file=sys.stderr))
+        ctx.add_callable("__log_raw", lambda s: print(f"[mermaidx/js] {s}", file=sys.stderr))
         ctx.add_callable(
             "__measureText_raw",
             lambda t, s, f, w, st: self._measurer.width(t, s, f, w, st),
@@ -169,8 +169,8 @@ class Engine:
             ctx.set("__css", css)
             ctx.eval(
                 "(function(){"
-                "  var el = document.getElementById('mmdc-css') || document.createElement('style');"
-                "  el.setAttribute('id', 'mmdc-css');"
+                "  var el = document.getElementById('mermaidx-css') || document.createElement('style');"
+                "  el.setAttribute('id', 'mermaidx-css');"
                 "  el.textContent = __css;"
                 "  document.head.appendChild(el);"
                 "})();"

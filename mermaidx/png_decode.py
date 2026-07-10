@@ -1,9 +1,9 @@
 """
-mmdc.png_decode — just enough of the PNG spec to pull raw RGB(A) pixels back
+mermaidx.png_decode — just enough of the PNG spec to pull raw RGB(A) pixels back
 out of a PNG file, using only the standard library (`zlib`, `struct`).
 
 Why this exists: resvg only emits PNG bytes. To embed those pixels into a
-hand-written PDF (see mmdc.pdf_writer) as an image XObject, or to hand back
+hand-written PDF (see mermaidx.pdf_writer) as an image XObject, or to hand back
 raw RGBA8888 buffers (Diagram.raw() / .numpy()), we need actual samples, not
 a PNG container — and every mainstream "give me a raster image" library
 (Pillow, pikepdf, img2pdf, reportlab...) pulls in Pillow as a transitive

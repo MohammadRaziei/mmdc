@@ -1,4 +1,4 @@
-"""mmdc.backends — which rendering backends are available."""
+"""mermaidx.backends — which rendering backends are available."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ def backends() -> list:
     Always includes ``'js'`` (this package's own QuickJS + resvg engine,
     zero extra dependencies). If the optional ``mmdr`` package
     (https://github.com/mohammadraziei/mmdr) is installed — e.g. via
-    ``pip install mmdc[rust]`` — its backends are appended too::
+    ``pip install mermaidx[rust]`` — its backends are appended too::
 
         >>> backends()
         ['js']                                       # mmdr not installed

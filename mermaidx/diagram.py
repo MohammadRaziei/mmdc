@@ -1,5 +1,5 @@
 """
-mmdc.diagram — the object returned by mmdc.render().
+mermaidx.diagram — the object returned by mermaidx.render().
 
     DiagramBase   -- all the shared machinery: caching, and default
                      implementations of every derived output (png/raw/
@@ -29,11 +29,11 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from mmdc.ascii import render_ascii
-from mmdc.engine import Engine, MermaidRenderError
-from mmdc.pdf_writer import png_to_pdf
-from mmdc.png_decode import decode_png_rgba, decode_png
-from mmdc.raster import render_png
+from mermaidx.ascii import render_ascii
+from mermaidx.engine import Engine, MermaidRenderError
+from mermaidx.pdf_writer import png_to_pdf
+from mermaidx.png_decode import decode_png_rgba, decode_png
+from mermaidx.raster import render_png
 
 if TYPE_CHECKING:
     import numpy as np
@@ -73,7 +73,7 @@ class DiagramBase:
     rasterize `self.svg()` via resvg, which is enough to make every output
     format available regardless of backend.
 
-    Not instantiated directly -- use mmdc.render(), which picks the right
+    Not instantiated directly -- use mermaidx.render(), which picks the right
     subclass for the requested backend.
     """
 
@@ -351,9 +351,9 @@ class Diagram(DiagramBase):
 
     Example::
 
-        import mmdc
+        import mermaidx
 
-        d = mmdc.render("flowchart LR; A-->B-->C")
+        d = mermaidx.render("flowchart LR; A-->B-->C")
 
         d.svg()                          # str -- computed on first call
         d.svg() is d.svg()               # True -- cached, not recomputed
@@ -395,7 +395,7 @@ class Diagram(DiagramBase):
 
 class DiagramRust(DiagramBase):
     """Any backend provided by the optional `mmdr` package (e.g. 'merman',
-    'mermaid-rs-renderer' -- see mmdc.backends()). Only _svg() is delegated
+    'mermaid-rs-renderer' -- see mermaidx.backends()). Only _svg() is delegated
     to mmdr; png/raw/numpy/pdf all go through *our* resvg + PDF writer
     instead of mmdr's own, which means outputs mmdr doesn't natively
     support (its own Diagram.pdf() currently raises NotImplementedError)
@@ -442,7 +442,7 @@ def render(source: str, backend: Optional[str] = None, **opts) -> "DiagramBase":
     except ImportError as exc:
         raise ImportError(
             f"backend={backend!r} requires the optional 'mmdr' package. "
-            "Install it with:\n    pip install mmdc[rust]"
+            "Install it with:\n    pip install mermaidx[rust]"
         ) from exc
 
     if backend not in mmdr.backends():

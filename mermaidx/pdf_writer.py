@@ -1,9 +1,9 @@
 """
-mmdc.pdf_writer — hand-written, dependency-free PDF generation.
+mermaidx.pdf_writer — hand-written, dependency-free PDF generation.
 
 Every mainstream "put a raster image on a PDF page" library (Pillow,
 pikepdf, img2pdf, reportlab) pulls in Pillow as a transitive dependency.
-Since resvg already gives us decoded, real pixels (via mmdc.png_decode),
+Since resvg already gives us decoded, real pixels (via mermaidx.png_decode),
 building the PDF objects directly is a bounded, well-specified task and
 avoids that dependency entirely — this only uses `zlib` and `struct` from
 the standard library.
@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Optional
 
-from mmdc.png_decode import DecodedPNG
+from mermaidx.png_decode import DecodedPNG
 
 _MM_PER_INCH = 25.4
 _PDF_PT_PER_PX = 72 / 96  # PDF points are 1/72in; we treat px as 1/96in (CSS px)

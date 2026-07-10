@@ -1,8 +1,8 @@
 """
-Tests for the mmdc CLI.
+Tests for the mermaidx CLI.
 
 Everything here is either a direct subprocess call (real end-to-end CLI
-wiring) or a direct call into mmdc.render() (conversion logic, without the
+wiring) or a direct call into mermaidx.render() (conversion logic, without the
 subprocess overhead). There's no async fixture anymore -- rendering is
 CPU-bound and synchronous end to end, so a plain module-level helper is
 enough; no shared "session" object needs to be kept alive across tests.
@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from mmdc import render
+from mermaidx import render
 
 BASIC_MERMAID = Path(__file__).parent / "basic.mermaid"
 SIMPLE = "graph LR\n    A --> B"
@@ -29,7 +29,7 @@ FLOWCHART = "graph TD\n    A[Start] --> B{Yes?}\n    B -->|Yes| C[OK]\n    B -->
 
 def run(*args, input: str = None) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, "-m", "mmdc", *args],
+        [sys.executable, "-m", "mermaidx", *args],
         capture_output=True, text=True, input=input,
     )
 
@@ -55,7 +55,7 @@ def test_short_version():
 def test_help():
     r = run("--help")
     assert r.returncode == 0
-    assert "mmdc" in r.stdout
+    assert "mermaidx" in r.stdout
 
 
 def test_info():
@@ -67,7 +67,7 @@ def test_info():
 def test_info_matches_rendering_info_diagram_directly():
     """
     `--info` extracts text from the rendered "info" diagram internally.
-    `echo "info" | mmdc -i -` renders that exact same diagram through the
+    `echo "info" | mermaidx -i -` renders that exact same diagram through the
     normal (non-shortcut) code path and writes raw SVG to stdout. Both must
     report the same Mermaid version.
     """

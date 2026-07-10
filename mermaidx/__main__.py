@@ -1,19 +1,19 @@
 """
-mmdc CLI — python -m mmdc
+mermaidx CLI — python -m mermaidx
 
 Convert Mermaid diagrams to SVG, PNG, or PDF. Fully synchronous: rendering
 is CPU-bound (no browser process, no I/O to wait on), so there's no event
 loop here at all -- one less thing to start up.
 
 Examples:
-    mmdc -i diagram.mermaid                    # SVG to stdout
-    mmdc -i diagram.mermaid -o diagram.svg
-    mmdc -i diagram.mermaid -o diagram.png -w 1200
-    mmdc -i diagram.mermaid -o diagram.pdf --pdf-format A4
-    cat diagram.mermaid | mmdc -i -
-    mmdc --info
-    mmdc --list-backends
-    mmdc -i diagram.mermaid --backend merman -o diagram.svg
+    mermaidx -i diagram.mermaid                    # SVG to stdout
+    mermaidx -i diagram.mermaid -o diagram.svg
+    mermaidx -i diagram.mermaid -o diagram.png -w 1200
+    mermaidx -i diagram.mermaid -o diagram.pdf --pdf-format A4
+    cat diagram.mermaid | mermaidx -i -
+    mermaidx --info
+    mermaidx --list-backends
+    mermaidx -i diagram.mermaid --backend merman -o diagram.svg
 """
 
 import argparse
@@ -21,36 +21,36 @@ import json
 import sys
 from pathlib import Path
 
-import mmdc
-from mmdc.diagram import Diagram
+import mermaidx
+from mermaidx.diagram import Diagram
 
 
 def _get_version() -> str:
     try:
         import importlib.metadata
-        return importlib.metadata.version("mmdc")
+        return importlib.metadata.version("mermaidx")
     except Exception:
         return "unknown"
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmdc",
+        prog="mermaidx",
         description="Convert Mermaid diagrams to SVG, PNG, or PDF — fully offline.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 examples:
-  mmdc -i diagram.mermaid                         # SVG to stdout
-  mmdc -i diagram.mermaid -o diagram.svg
-  mmdc -i diagram.mermaid -o diagram.png -w 1200
-  mmdc -i diagram.mermaid -o diagram.png --scale 2.0
-  mmdc -i diagram.mermaid -o diagram.pdf
-  mmdc -i diagram.mermaid -o diagram.pdf --pdf-format A4 --landscape
-  mmdc -i diagram.mermaid -o diagram.svg --theme dark
-  cat diagram.mermaid | mmdc -i -
-  mmdc --info
-  mmdc --list-backends
-  mmdc -i diagram.mermaid --backend merman -o diagram.svg
+  mermaidx -i diagram.mermaid                         # SVG to stdout
+  mermaidx -i diagram.mermaid -o diagram.svg
+  mermaidx -i diagram.mermaid -o diagram.png -w 1200
+  mermaidx -i diagram.mermaid -o diagram.png --scale 2.0
+  mermaidx -i diagram.mermaid -o diagram.pdf
+  mermaidx -i diagram.mermaid -o diagram.pdf --pdf-format A4 --landscape
+  mermaidx -i diagram.mermaid -o diagram.svg --theme dark
+  cat diagram.mermaid | mermaidx -i -
+  mermaidx --info
+  mermaidx --list-backends
+  mermaidx -i diagram.mermaid --backend merman -o diagram.svg
         """,
     )
 
@@ -98,10 +98,10 @@ def _read_source(input_arg: str) -> str:
     return Path(input_arg).read_text(encoding="utf-8")
 
 
-def _print_info(backend) -> None:
+def _print_info() -> None:
     import xml.etree.ElementTree as ET
 
-    svg_str = mmdc.render("info", backend=backend).svg()
+    svg_str = Diagram("info").svg()
     root = ET.fromstring(svg_str)
     texts = [
         el.text.strip()
@@ -112,7 +112,7 @@ def _print_info(backend) -> None:
 
 
 def _print_backends() -> None:
-    available = mmdc.backends()
+    available = mermaidx.backends()
     for name in available:
         marker = " (default)" if name == "js" else ""
         print(f"{name}{marker}")
@@ -122,10 +122,8 @@ def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
-    backend = args.backend or "js"
-
     if args.info:
-        _print_info(backend)
+        _print_info()
         return
 
     if args.list_backends:
@@ -139,6 +137,7 @@ def main() -> None:
     config = json.loads(Path(args.config).read_text(encoding="utf-8")) if args.config else None
     css = Path(args.css).read_text(encoding="utf-8") if args.css else None
 
+    backend = args.backend or "js"
     render_kwargs = {"theme": args.theme}
     if backend == "js":
         render_kwargs.update(config=config, css=css)
@@ -146,7 +145,7 @@ def main() -> None:
         print(f"warning: --config/--css are ignored for backend={backend!r} (only 'js' supports them)",
               file=sys.stderr)
 
-    d = mmdc.render(source, backend=args.backend, **render_kwargs)
+    d = mermaidx.render(source, backend=args.backend, **render_kwargs)
 
     if args.output is None:
         sys.stdout.buffer.write(d.svg().encode("utf-8"))

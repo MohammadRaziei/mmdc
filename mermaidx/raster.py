@@ -1,8 +1,8 @@
 """
-mmdc.raster — SVG -> PNG via resvg_py.
+mermaidx.raster — SVG -> PNG via resvg_py.
 
 `skip_system_fonts=True` + explicit `font_files` means every render uses
-exactly the same bundled DejaVu Sans files that mmdc.font_metrics reads for
+exactly the same bundled DejaVu Sans files that mermaidx.font_metrics reads for
 layout measurement (see engine.py) — the whole point being that mermaid's
 layout and the final pixels always agree, regardless of what fonts (if any)
 happen to be installed on the host system.
@@ -15,7 +15,7 @@ from typing import Optional
 
 import resvg_py
 
-from mmdc.png_decode import decode_png_rgba
+from mermaidx.png_decode import decode_png_rgba
 
 _FONTS_DIR = Path(__file__).parent / "assets" / "fonts"
 _FONT_FILES = [
@@ -56,7 +56,7 @@ def svg_to_png(
     height: Optional[float] = None,
     background: Optional[str] = None,
 ) -> bytes:
-    """Rasterize any SVG string to PNG bytes (doesn't have to come from mmdc)."""
+    """Rasterize any SVG string to PNG bytes (doesn't have to come from mermaidx)."""
     return render_png(svg, background=background, width=width, height=height)
 
 

@@ -1,7 +1,7 @@
 """
 Structural comparison against mermaid.ink (a hosted mermaid-cli/puppeteer
 service) — NOT pixel-diffing, since mermaid.ink renders with real Chrome and
-whatever mermaid version it currently runs, while mmdc renders with QuickJS
+whatever mermaid version it currently runs, while mermaidx renders with QuickJS
 + resvg and a bundled font. Two different engines will never be pixel-
 identical. What should agree:
 
@@ -29,8 +29,8 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from mmdc import render
-from mmdc.png_decode import decode_png
+from mermaidx import render
+from mermaidx.png_decode import decode_png
 
 MERMAID_INK_TIMEOUT = 10  # seconds
 
@@ -62,12 +62,12 @@ def _fetch(url: str) -> bytes:
     """GET url, retrying transient failures a couple of times before giving
     up. If it still fails, skip (not fail) the calling test -- mermaid.ink
     is a free public service and does occasionally return 503s or rate-limit
-    shared CI IP ranges; that's not something mmdc's test suite should be
+    shared CI IP ranges; that's not something mermaidx's test suite should be
     red over."""
     last_error = None
     for attempt in range(3):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; mmdc-test-suite)"})
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; mermaidx-test-suite)"})
             with urllib.request.urlopen(req, timeout=MERMAID_INK_TIMEOUT) as resp:
                 return resp.read()
         except (urllib.error.URLError, socket.timeout, ConnectionError, TimeoutError) as e:

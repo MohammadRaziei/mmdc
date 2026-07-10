@@ -1,9 +1,9 @@
 """
-mmdc — Mermaid diagram rendering, no browser, Node.js, or npm required.
+mermaidx — Mermaid diagram rendering, no browser, Node.js, or npm required.
 
-    import mmdc
+    import mermaidx
 
-    d = mmdc.render("flowchart LR; A-->B-->C")   # SVG rendered immediately
+    d = mermaidx.render("flowchart LR; A-->B-->C")   # SVG rendered immediately
     d.svg()                                        # str
     d.png()                                        # bytes
     d.png(width=1200, background="#ffffff")
@@ -12,9 +12,9 @@ mmdc — Mermaid diagram rendering, no browser, Node.js, or npm required.
     d.pdf()                                         # bytes -- fully supported
     d.save("out.svg") / d.save("out.png") / d.save("out.pdf")
 
-    mmdc.backends()          # ['js']  (+ mmdr's backends if installed)
-    mmdc.render_many(sources, workers=4)   # real parallelism (multiprocessing)
-    mmdc.render_ascii(source)              # terminal-friendly text (always available)
+    mermaidx.backends()          # ['js']  (+ mmdr's backends if installed)
+    mermaidx.render_many(sources, workers=4)   # real parallelism (multiprocessing)
+    mermaidx.render_ascii(source)              # terminal-friendly text (always available)
 """
 
 from .__about__ import __version__
@@ -23,16 +23,6 @@ from .backends import backends
 from .raster import svg_to_png, svg_to_raw
 from .pool import render_many
 from .ascii import render_ascii
-
-import warnings
-
-warnings.warn(
-    "The package 'mmdc' has been renamed to 'mermaidx'. "
-    "Please update your dependencies to use 'mermaidx' instead. "
-    "This package will no longer be maintained.",
-    DeprecationWarning,
-    stacklevel=2
-)
 
 __all__ = [
     "__version__",

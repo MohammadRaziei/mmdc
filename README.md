@@ -1,52 +1,41 @@
-# mmdc — Mermaid Diagram Converter for Python
+# mermaidx — Mermaid Diagram Converter for Python
 
-[![PyPI](https://img.shields.io/pypi/v/mmdc.svg)](https://pypi.org/project/mmdc)
-[![Python](https://img.shields.io/pypi/pyversions/mmdc.svg)](https://pypi.org/project/mmdc)
+[![PyPI](https://img.shields.io/pypi/v/mermaidx.svg)](https://pypi.org/project/mermaidx)
+[![Python](https://img.shields.io/pypi/pyversions/mermaidx.svg)](https://pypi.org/project/mermaidx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://github.com/MohammadRaziei/mmdc/actions/workflows/wheel.yml/badge.svg)](https://github.com/MohammadRaziei/mmdc/actions/workflows/wheel.yml)
-[![GitHub stars](https://img.shields.io/github/stars/MohammadRaziei/mmdc?style=social)](https://github.com/MohammadRaziei/mmdc/stargazers)
+[![Tests](https://github.com/MohammadRaziei/mermaidx/actions/workflows/wheel.yml/badge.svg)](https://github.com/MohammadRaziei/mermaidx/actions/workflows/wheel.yml)
+[![GitHub stars](https://img.shields.io/github/stars/MohammadRaziei/mermaidx?style=social)](https://github.com/MohammadRaziei/mermaidx/stargazers)
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/MohammadRaziei/mmdc/master/docs/static/img/logo.svg" width="150pt"/>
+<img src="https://raw.githubusercontent.com/MohammadRaziei/mermaidx/master/docs/static/img/logo.svg" width="150pt"/>
 </div>
 
+Convert Mermaid diagrams to SVG, PNG, PDF, or ASCII art — **fully offline and fast, just `pip install mermaidx`**.
 
-> **⚠️ DEPRECATION NOTICE**
-> This project has been renamed to **[mermaidx](https://github.com/MohammadRaziei/mermaidx)**.
->
-> All future development, bug fixes, and new features will take place in the new repository. Please update your dependencies to use the new package.
-> 
-> *   **New Repository:** [https://github.com/MohammadRaziei/mermaidx](https://github.com/MohammadRaziei/mermaidx)
-> *   **New PyPI Package:** `pip install mermaidx`
->
-> The `mmdc` package will no longer be updated. Thank you for your support!
-
-Convert Mermaid diagrams to SVG, PNG, PDF, or ASCII art — **fully offline and fast, just `pip install mmdc`**.
-
-**Completely browserless.** No Node.js, no npm, no Chrome, no system packages, nothing to compile. And because there's no browser to boot, `mmdc` renders noticeably faster than the official `mermaid-cli`, which drives a real headless Chrome through Puppeteer for every single diagram — `mmdc` uses a fast, embedded JS engine instead.
+**Completely browserless.** No Node.js, no npm, no Chrome, no system packages, nothing to compile. And because there's no browser to boot, `mermaidx` renders noticeably faster than the official `mermaid-cli`, which drives a real headless Chrome through Puppeteer for every single diagram — `mermaidx` uses a fast, embedded JS engine instead.
 
 ```bash
-pip install mmdc
+pip install mermaidx
 ```
 
 That's it — SVG, PNG, PDF, and ASCII output all work out of the box; nothing else to install.
 
 ---
 
-## Why mmdc?
+## Why mermaidx?
 
 The official Mermaid CLI (`@mermaid-js/mermaid-cli`) works by spinning up a real headless Chrome via Puppeteer for every render. That works, but a full browser is slow to start and heavy to install (~170MB+ of Chromium), which shows up directly in wall-clock time — especially in CI pipelines rendering many diagrams, or anything short-lived like a serverless function.
 
-`mmdc` renders the actual, current Mermaid v11 JS library — not a reimplementation, not a subset — but runs it inside a small embedded JavaScript engine instead of a browser. No browser process to spawn, no page to load, no DOM to boot — just the JS engine running Mermaid's own layout code directly. That's the whole speed difference in one sentence: **browser vs. no browser.**
+`mermaidx` renders the actual, current Mermaid v11 JS library — not a reimplementation, not a subset — but runs it inside a small embedded JavaScript engine instead of a browser. No browser process to spawn, no page to load, no DOM to boot — just the JS engine running Mermaid's own layout code directly. That's the whole speed difference in one sentence: **browser vs. no browser.**
 
 ---
 
 ## Quick Start
 
 ```python
-import mmdc
+import mermaidx
 
-d = mmdc.render("""
+d = mermaidx.render("""
 graph TD
     A[Install] --> B[Import]
     B --> C[Convert]
@@ -60,9 +49,9 @@ print(d.ascii())
 ```
 
 ```bash
-mmdc -i diagram.mermaid -o diagram.svg
-mmdc -i diagram.mermaid -o diagram.png --scale 2.0
-cat diagram.mermaid | mmdc -i - -o diagram.pdf
+mermaidx -i diagram.mermaid -o diagram.svg
+mermaidx -i diagram.mermaid -o diagram.png --scale 2.0
+cat diagram.mermaid | mermaidx -i - -o diagram.pdf
 ```
 
 ---
@@ -89,7 +78,7 @@ Everything happens in one process, no subprocess, no I/O:
 - **PDF** — a small hand-written PDF writer (stdlib `zlib`/`struct` only) embeds the rendered pixels directly. No Pillow, no Cairo, no reportlab — every mainstream "put an image in a PDF" library pulls in Pillow as a transitive dependency; this avoids that entirely.
 - **ASCII** — a completely separate, lightweight path via [termaid](https://pypi.org/project/termaid/) (pure Python, ~700KB, zero dependencies), which parses the Mermaid source itself rather than going through the SVG.
 
-Rendering is CPU-bound, synchronous, single-process — there's no browser or subprocess to wait on, so there's nothing for `async` to usefully overlap. See [`mmdc.render_many()`](#parallel-batch-rendering) below for real parallelism instead.
+Rendering is CPU-bound, synchronous, single-process — there's no browser or subprocess to wait on, so there's nothing for `async` to usefully overlap. See [`mermaidx.render_many()`](#parallel-batch-rendering) below for real parallelism instead.
 
 Every backend is a small subclass of one shared `DiagramBase` — `Diagram` for `'js'`, `DiagramRust` for anything from the optional `mmdr` package. Subclasses only override the private `_svg()` hook; the public, cached `svg()`/`png()`/`pdf()`/`raw()`/`numpy()`/`ascii()`/`save()` are all written once in the base class and work identically regardless of which backend produced the SVG.
 
@@ -100,9 +89,9 @@ Every backend is a small subclass of one shared `DiagramBase` — `Diagram` for 
 ### `render(source, backend=None, **opts) -> Diagram`
 
 ```python
-import mmdc
+import mermaidx
 
-d = mmdc.render("flowchart LR; A-->B-->C")
+d = mermaidx.render("flowchart LR; A-->B-->C")
 ```
 
 `render()` itself does nothing but store the source — every `Diagram` method below is **lazy and cached**: nothing is computed until you call it, and calling it again with the same arguments returns the memoized result instead of recomputing.
@@ -140,9 +129,9 @@ d.save("out.whatever", format="png")    # force a format regardless of extension
 ### Themes, config, CSS
 
 ```python
-mmdc.render(source, theme="dark")                    # "default" | "forest" | "dark" | "neutral"
-mmdc.render(source, config={"flowchart": {"curve": "basis"}})
-mmdc.render(source, css=".node rect { rx: 8; ry: 8; }")
+mermaidx.render(source, theme="dark")                    # "default" | "forest" | "dark" | "neutral"
+mermaidx.render(source, config={"flowchart": {"curve": "basis"}})
+mermaidx.render(source, css=".node rect { rx: 8; ry: 8; }")
 ```
 
 ### Parallel batch rendering
@@ -150,7 +139,7 @@ mmdc.render(source, css=".node rect { rx: 8; ry: 8; }")
 Rendering is pure CPU work — no I/O to overlap, so real concurrency means real processes, not `async`:
 
 ```python
-diagrams = mmdc.render_many(sources, workers=4, theme="dark")
+diagrams = mermaidx.render_many(sources, workers=4, theme="dark")
 for d, name in zip(diagrams, output_names):
     d.save(name)
 ```
@@ -162,8 +151,8 @@ Each worker process starts its own persistent engine once and reuses it for ever
 Works out of the box — [termaid](https://pypi.org/project/termaid/) (pure Python, ~700KB, zero dependencies of its own) is a core dependency, not an optional extra:
 
 ```python
-print(mmdc.render_ascii("graph LR; A-->B-->C"))
-# or, equivalently: mmdc.render("graph LR; A-->B-->C").ascii()
+print(mermaidx.render_ascii("graph LR; A-->B-->C"))
+# or, equivalently: mermaidx.render("graph LR; A-->B-->C").ascii()
 ```
 ```
 ┌───┐    ┌───┐    ┌───┐
@@ -176,7 +165,7 @@ print(mmdc.render_ascii("graph LR; A-->B-->C"))
 Rasterize any SVG string directly, without going through `render()`:
 
 ```python
-from mmdc import svg_to_png, svg_to_raw
+from mermaidx import svg_to_png, svg_to_raw
 
 svg = open("diagram.svg").read()
 png = svg_to_png(svg, width=1200, background="#ffffff")
@@ -186,17 +175,17 @@ raw, w, h = svg_to_raw(svg)
 ### Additional backends (optional)
 
 ```bash
-pip install mmdc[rust]
+pip install mermaidx[rust]
 ```
 
-If [`mmdr`](https://github.com/mohammadraziei/mmdr) (a native-Rust Mermaid renderer) is installed, its backends become available too — same interface either way, and with a bonus: PDF/raw/numpy work even for backends that don't natively support them (mmdr's own `Diagram.pdf()` raises `NotImplementedError`; `mmdc`'s doesn't, for *any* backend), because every backend shares the same `DiagramBase` — only `svg()` differs per backend, everything downstream of it (PNG/PDF/raw/numpy) is the same resvg + PDF-writer pipeline for all of them:
+If [`mmdr`](https://github.com/mohammadraziei/mmdr) (a native-Rust Mermaid renderer) is installed, its backends become available too — same interface either way, and with a bonus: PDF/raw/numpy work even for backends that don't natively support them (mmdr's own `Diagram.pdf()` raises `NotImplementedError`; `mermaidx`'s doesn't, for *any* backend), because every backend shares the same `DiagramBase` — only `svg()` differs per backend, everything downstream of it (PNG/PDF/raw/numpy) is the same resvg + PDF-writer pipeline for all of them:
 
 ```python
-mmdc.backends()
+mermaidx.backends()
 # ['js']                                   # mmdr not installed
 # ['js', 'merman', 'mermaid-rs-renderer']   # mmdr installed
 
-d = mmdc.render(source, backend="merman")   # svg() comes from mmdr; everything else from mmdc
+d = mermaidx.render(source, backend="merman")   # svg() comes from mmdr; everything else from mermaidx
 d.pdf()                                      # works, even though mmdr's own .pdf() doesn't
 ```
 
@@ -206,39 +195,39 @@ d.pdf()                                      # works, even though mmdr's own .pd
 
 ```bash
 # SVG to stdout (no -o needed)
-mmdc -i diagram.mermaid
-cat diagram.mermaid | mmdc -i -
+mermaidx -i diagram.mermaid
+cat diagram.mermaid | mermaidx -i -
 
 # save to file (format from extension)
-mmdc -i diagram.mermaid -o diagram.svg
-mmdc -i diagram.mermaid -o diagram.png
-mmdc -i diagram.mermaid -o diagram.pdf
+mermaidx -i diagram.mermaid -o diagram.svg
+mermaidx -i diagram.mermaid -o diagram.png
+mermaidx -i diagram.mermaid -o diagram.pdf
 
 # size
-mmdc -i diagram.mermaid -o diagram.png -w 1200
-mmdc -i diagram.mermaid -o diagram.png --scale 2.0
+mermaidx -i diagram.mermaid -o diagram.png -w 1200
+mermaidx -i diagram.mermaid -o diagram.png --scale 2.0
 
 # theme & background
-mmdc -i diagram.mermaid -o diagram.svg --theme dark
-mmdc -i diagram.mermaid -o diagram.png --background "#f5f5f5"
+mermaidx -i diagram.mermaid -o diagram.svg --theme dark
+mermaidx -i diagram.mermaid -o diagram.png --background "#f5f5f5"
 
 # PDF options
-mmdc -i diagram.mermaid -o diagram.pdf --pdf-format A4 --landscape --margin 1cm
+mermaidx -i diagram.mermaid -o diagram.pdf --pdf-format A4 --landscape --margin 1cm
 
 # config & CSS
-mmdc -i diagram.mermaid -o diagram.svg --config config.json --css style.css
+mermaidx -i diagram.mermaid -o diagram.svg --config config.json --css style.css
 
 # info — Mermaid library version
-mmdc --info
+mermaidx --info
 
 # list available backends
-mmdc --list-backends
+mermaidx --list-backends
 
-# pick a backend explicitly (requires mmdc[rust] for anything but 'js')
-mmdc -i diagram.mermaid -o diagram.svg --backend merman
+# pick a backend explicitly (requires mermaidx[rust] for anything but 'js')
+mermaidx -i diagram.mermaid -o diagram.svg --backend merman
 
 # version
-mmdc --version   # or -v
+mermaidx --version   # or -v
 ```
 
 ---
@@ -270,9 +259,17 @@ pytest tests/ -v
 
 ---
 
+## History
+
+- **mmdc, powered by [phasma](https://github.com/mohammadraziei/phasma)** — the original version of this project. It bundled a real (if small — around 20MB) headless browser, PhantomJS, and exposed an `async` Python API to match: rendering meant talking to a subprocess, so `async`/`await` genuinely mattered for concurrency.
+- **0.6.x** — a full rewrite: PhantomJS's engine couldn't parse modern Mermaid (v11's ES2022+ syntax) at all, so the whole browser was replaced with mermaid.js running inside QuickJS-ng against a hand-written DOM/SVG shim, with resvg for rasterization. No subprocess left to wait on, so the API became synchronous. Three backends appeared: `js` (this engine), plus `merman` and `mermaid-rs-renderer` via the optional [`mmdr`](https://github.com/mohammadraziei/mmdr) package.
+- **0.7.x, renamed to mermaidx** — same engine, new name. The old name, `mmdc`, was identical to the official Mermaid CLI's own binary name (`@mermaid-js/mermaid-cli` installs a command called `mmdc`) — a real collision, not just a branding concern. Renamed early, while it still could be.
+
+---
+
 ## Acknowledgments
 
-- [Mermaid](https://github.com/mermaid-js/mermaid) — the actual diagramming library this project renders. `mmdc` wouldn't exist without it; all it does is run the real thing somewhere a browser can't go.
+- [Mermaid](https://github.com/mermaid-js/mermaid) — the actual diagramming library this project renders. `mermaidx` wouldn't exist without it; all it does is run the real thing somewhere a browser can't go.
 - [mmdr](https://github.com/mohammadraziei/mmdr) — a native-Rust Mermaid renderer by the same author, usable as an additional backend here (see [Additional backends](#additional-backends-optional)).
 - [termaid](https://pypi.org/project/termaid/) — powers ASCII/Unicode terminal output.
 
@@ -291,7 +288,7 @@ pytest tests/ -v
 
 MIT — see [LICENSE](LICENSE) for details.
 
-If `mmdc` saves you from booting a headless Chrome instance a hundred times in CI, consider leaving a ⭐ on the repo — it genuinely helps others find the project.
+If `mermaidx` saves you from booting a headless Chrome instance a hundred times in CI, consider leaving a ⭐ on the repo — it genuinely helps others find the project.
 
 ---
 
