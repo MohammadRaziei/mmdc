@@ -5,9 +5,51 @@ globalThis.console = {
   error: (...a) => globalThis.__log && globalThis.__log("ERROR: " + a.map(String).join(" ")),
   debug: () => {}, info: () => {},
 };
+
+// Legacy RegExp static match properties ($1-$9, $&, $_, $`, $') -- a very old,
+// non-standard (but still widely relied upon) feature that real browser JS
+// engines keep for backward compatibility. QuickJS-ng does not implement it,
+// but mermaid bundles a roughjs-derived SVG path-data parser that reads
+// RegExp.$1 after every match() call (e.g. for the "stadium" node shape, and
+// state-diagram start/end circles) -- without this, that parser silently
+// gets `undefined` and crashes with "cannot read property 'length' of
+// undefined". Patching RegExp.prototype.exec covers match()/test() too,
+// since both route through it per spec.
+(function () {
+  const origExec = RegExp.prototype.exec;
+  RegExp.prototype.exec = function (str) {
+    const result = origExec.call(this, str);
+    if (result) {
+      for (let i = 1; i <= 9; i++) {
+        RegExp["$" + i] = result[i] !== undefined ? result[i] : "";
+      }
+      RegExp["$&"] = result[0];
+      RegExp.$_ = str;
+      RegExp["$`"] = str.slice(0, result.index);
+      RegExp["$'"] = str.slice(result.index + result[0].length);
+    }
+    return result;
+  };
+})();
+
+// Minimal crypto.getRandomValues polyfill -- QuickJS has no Web Crypto API
+// at all, but mermaid bundles the `uuid` library (used for mindmap node IDs,
+// among other things) which requires it to exist. Mermaid only needs these
+// IDs to be unique within one render, not cryptographically secure, so
+// Math.random() is a perfectly fine source here.
+globalThis.crypto = {
+  getRandomValues(typedArray) {
+    const max = Math.pow(2, 8 * typedArray.BYTES_PER_ELEMENT);
+    for (let i = 0; i < typedArray.length; i++) {
+      typedArray[i] = Math.floor(Math.random() * max);
+    }
+    return typedArray;
+  },
+};
+
 // Minimal fake browser environment for mermaid.js layout-only rendering.
-// getBBox / getComputedTextLength call back into Python (via __measureText)
-// which uses Cairo for real font metrics.
+// getBBox / getComputedTextLength call back into Python (via __measureText),
+// which reads real glyph widths from a bundled font (see font_metrics.py).
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const XHTML_NS = "http://www.w3.org/1999/xhtml";
@@ -19,6 +61,7 @@ function CSSStyleDecl() {
       if (p === "cssText") return Object.entries(t).map(([k,v])=>`${k}:${v}`).join(";");
       if (p === "setProperty") return (k,v) => { t[k]=v; };
       if (p === "removeProperty") return (k) => { delete t[k]; };
+      if (p === "getPropertyValue") return (k) => t[k] || "";
       return t[p] || "";
     },
     set(t, p, v) { t[p] = v; return true; }
@@ -62,6 +105,10 @@ class Node {
   get ownerDocument() { return globalThis.__document; }
   get firstChild() { return this.childNodes[0] || null; }
   get lastChild() { return this.childNodes[this.childNodes.length-1] || null; }
+  get children() { return this.childNodes.filter(c => c.nodeType === 1); }
+  get firstElementChild() { return this.children[0] || null; }
+  get lastElementChild() { const c = this.children; return c[c.length-1] || null; }
+  get childElementCount() { return this.children.length; }
   get nextSibling() {
     if (!this.parentNode) return null;
     const i = this.parentNode.childNodes.indexOf(this);
@@ -90,6 +137,8 @@ class Element extends Node {
     this._listeners = {};
   }
   get classList() { return new ClassList(this); }
+  get className() { return this.getAttribute("class") || ""; }
+  set className(v) { this.setAttribute("class", v); }
   setAttribute(k, v) { this._attrs[k] = String(v); }
   getAttribute(k) { return Object.prototype.hasOwnProperty.call(this._attrs,k) ? this._attrs[k] : null; }
   hasAttribute(k) { return k in this._attrs; }
@@ -104,6 +153,7 @@ class Element extends Node {
   }
   querySelector(sel) { return __querySelector(this, sel); }
   querySelectorAll(sel) { return __querySelectorAll(this, sel); }
+  matches(sel) { return __matches(this, sel); }
   get textContent() {
     return this.childNodes.map(c => c.nodeType===3 ? c.textContent : c.textContent).join("");
   }
