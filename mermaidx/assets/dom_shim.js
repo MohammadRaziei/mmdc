@@ -286,12 +286,29 @@ function __resolveFont(el) {
   return { size, family, weight, style };
 }
 
+function __resolveTextAnchor(el) {
+  let n = el;
+  while (n && n.nodeType === 1) {
+    if (n.hasAttribute && n.hasAttribute("text-anchor")) return n.getAttribute("text-anchor");
+    const s = n.style;
+    if (s && s.cssText) {
+      const ta = /text-anchor:\s*([a-z]+)/.exec(s.cssText);
+      if (ta) return ta[1];
+    }
+    n = n.parentNode;
+  }
+  return "start";
+}
+
 function __computeBBox(el) {
   if (el.tagName === "text" || el.tagName === "tspan") {
     const font = __resolveFont(el);
     const m = globalThis.__measureTextFull(el.textContent, font.size, font.family, font.weight, font.style);
-    const x = parseFloat(el.getAttribute("x")) || 0;
+    let x = parseFloat(el.getAttribute("x")) || 0;
     const y = parseFloat(el.getAttribute("y")) || 0;
+    const anchor = __resolveTextAnchor(el);
+    if (anchor === "middle") x -= m.width / 2;
+    else if (anchor === "end") x -= m.width;
     return { x, y: y - m.ascent, width: m.width, height: m.ascent + m.descent };
   }
   if (el.tagName === "rect") {
@@ -310,18 +327,54 @@ function __computeBBox(el) {
   if (el.tagName === "path") {
     return globalThis.__pathBBox(el.getAttribute("d") || "");
   }
-  // group / unknown: union of children
+  if (el.tagName === "polygon" || el.tagName === "polyline") {
+    const raw = el.getAttribute("points") || "";
+    const nums = raw.trim().split(/[\s,]+/).filter(s => s.length).map(Number);
+    const xs = [], ys = [];
+    for (let k = 0; k + 1 < nums.length; k += 2) { xs.push(nums[k]); ys.push(nums[k+1]); }
+    if (!xs.length) return { x: 0, y: 0, width: 0, height: 0 };
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+  if (el.tagName === "ellipse") {
+    const cx=parseFloat(el.getAttribute("cx"))||0, cy=parseFloat(el.getAttribute("cy"))||0;
+    const rx=parseFloat(el.getAttribute("rx"))||0, ry=parseFloat(el.getAttribute("ry"))||0;
+    return { x: cx-rx, y: cy-ry, width: 2*rx, height: 2*ry };
+  }
+  // group / unknown: union of children, each mapped through its own
+  // transform first. getBBox() is defined to return a bbox in the
+  // element's OWN local coordinate space (i.e. excluding its own
+  // transform) -- so when unioning children into the parent's space we
+  // must apply each child's transform ourselves. mermaid positions
+  // essentially every node/edge group via `transform="translate(x,y)"`,
+  // so skipping this made every computed bbox (including the one used
+  // for the final SVG viewBox) far too small, clipping the diagram.
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity, any=false;
   for (const c of el.childNodes) {
     if (c.nodeType !== 1) continue;
     const b = c.getBBox ? c.getBBox() : null;
     if (!b || (b.width===0 && b.height===0 && b.x===0 && b.y===0)) continue;
+    const [dx, dy] = __translateOf(c);
     any = true;
-    minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
-    maxX = Math.max(maxX, b.x+b.width); maxY = Math.max(maxY, b.y+b.height);
+    minX = Math.min(minX, b.x+dx); minY = Math.min(minY, b.y+dy);
+    maxX = Math.max(maxX, b.x+b.width+dx); maxY = Math.max(maxY, b.y+b.height+dy);
   }
   if (!any) return { x:0,y:0,width:0,height:0 };
   return { x:minX, y:minY, width:maxX-minX, height:maxY-minY };
+}
+
+// Extracts the (dx, dy) translation from an element's `transform` attribute.
+// Only translate(...) is handled -- the only form mermaid actually emits
+// for node/edge positioning -- other transform functions (rotate, scale,
+// matrix) are ignored (treated as 0,0) rather than attempted, since a wrong
+// partial transform is worse than a clearly-incomplete one.
+function __translateOf(el) {
+  const t = el.getAttribute && el.getAttribute("transform");
+  if (!t) return [0, 0];
+  const m = /translate\(\s*(-?[\d.]+)(?:[,\s]+(-?[\d.]+))?\s*\)/.exec(t);
+  if (!m) return [0, 0];
+  return [parseFloat(m[1]) || 0, m[2] !== undefined ? (parseFloat(m[2]) || 0) : 0];
 }
 
 // --- selector engine (tiny, tag/#id/.class/attr/descendant only) -------

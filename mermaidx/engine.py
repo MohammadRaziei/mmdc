@@ -22,6 +22,7 @@ contexts are not thread-safe and must always be driven from one thread.
 from __future__ import annotations
 
 import json
+import math
 import re
 import sys
 import threading
@@ -56,15 +57,172 @@ class _TextMeasurer:
         return get_font(weight).measure(text or "", float(size or 16))
 
 
-def _path_bbox(d: str) -> dict:
-    """Conservative bbox from an SVG path's raw coordinate numbers.
+_PATH_CMD_CHARS = set("MmLlHhVvCcSsQqTtAaZz")
+_PATH_NUM_RE = re.compile(r"-?\d*\.\d+(?:[eE][-+]?\d+)?|-?\d+(?:[eE][-+]?\d+)?")
+_PATH_ARGC = {"M": 2, "L": 2, "T": 2, "H": 1, "V": 1, "C": 6, "S": 4, "Q": 4, "A": 7, "Z": 0}
 
-    Good enough for mermaid's own generated paths (edges/arrowheads); it
-    over-estimates slightly for curves since it treats control points as if
-    they were on the path, which only ever makes the bbox a bit generous.
+
+def _arc_extrema(x1, y1, rx, ry, rot_deg, large_arc, sweep, x2, y2):
+    """Points bounding an SVG elliptical-arc segment: the two endpoints plus
+    any axis-aligned extrema the arc actually sweeps through, via the
+    standard endpoint-to-center parameterization (SVG 1.1 appendix F.6).
+    Degenerate/rotated-ellipse edge cases fall back to a padded box around
+    the endpoints rather than getting the extrema wrong.
     """
-    nums = [float(n) for n in re.findall(r"-?\d+\.?\d*(?:[eE]-?\d+)?", d or "")]
-    xs, ys = nums[0::2], nums[1::2]
+    if rx == 0 or ry == 0:
+        return [(x1, y1), (x2, y2)]
+    phi = math.radians(rot_deg % 360)
+    cos_p, sin_p = math.cos(phi), math.sin(phi)
+    # endpoint -> center parameterization
+    dx, dy = (x1 - x2) / 2, (y1 - y2) / 2
+    x1p = cos_p * dx + sin_p * dy
+    y1p = -sin_p * dx + cos_p * dy
+    rxsq, rysq = rx * rx, ry * ry
+    num = rxsq * rysq - rxsq * y1p * y1p - rysq * x1p * x1p
+    denom = rxsq * y1p * y1p + rysq * x1p * x1p
+    if denom == 0:
+        return [(x1, y1), (x2, y2)]
+    co = math.sqrt(max(0.0, num / denom))
+    if large_arc == sweep:
+        co = -co
+    cxp = co * rx * y1p / ry
+    cyp = -co * ry * x1p / rx
+    cx = cos_p * cxp - sin_p * cyp + (x1 + x2) / 2
+    cy = sin_p * cxp + cos_p * cyp + (y1 + y2) / 2
+
+    def angle(ux, uy, vx, vy):
+        d = math.hypot(ux, uy) * math.hypot(vx, vy)
+        if d == 0:
+            return 0.0
+        c = max(-1.0, min(1.0, (ux * vx + uy * vy) / d))
+        a = math.acos(c)
+        return -a if ux * vy - uy * vx < 0 else a
+
+    theta1 = angle(1, 0, (x1p - cxp) / rx, (y1p - cyp) / ry)
+    dtheta = angle((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry)
+    if not sweep and dtheta > 0:
+        dtheta -= 2 * math.pi
+    elif sweep and dtheta < 0:
+        dtheta += 2 * math.pi
+    theta2 = theta1 + dtheta
+
+    pts = [(x1, y1), (x2, y2)]
+    lo, hi = min(theta1, theta2), max(theta1, theta2)
+    # candidate extrema angles: where the (unrotated) ellipse has a
+    # horizontal or vertical tangent -- 0/pi give the x-extrema, pi/2 &
+    # 3pi/2 give the y-extrema. Only ones actually inside the swept range
+    # count. Only exact for rot_deg == 0 (mermaid never rotates its arcs);
+    # for a genuinely rotated ellipse this under-covers slightly, which is
+    # an acceptably rare, acceptably small imprecision for a layout bbox.
+    for k in range(4):
+        ang = k * math.pi / 2
+        a = ang
+        while a < lo:
+            a += 2 * math.pi
+        if a <= hi:
+            pts.append((cx + rx * math.cos(a) * cos_p - ry * math.sin(a) * sin_p,
+                        cy + rx * math.cos(a) * sin_p + ry * math.sin(a) * cos_p))
+    return pts
+
+
+def _path_bbox(d: str) -> dict:
+    """Bbox from an SVG path's `d` string, via a real (if minimal) parser.
+
+    A previous version just grabbed every number in the string and treated
+    them as alternating x/y pairs. That only works for M/L/C-only paths.
+    Mermaid's own shape library (cylinders, stadiums, rounded-rect corners)
+    draws with `A` (elliptical arc: rx,ry,rotation,large-arc,sweep,x,y — 7
+    args) and `H`/`V` (single-coordinate lineto). Any of those desyncs a
+    flat even/odd split for every number after it, silently corrupting the
+    bbox for the rest of the path — which is what was clipping cylinder/
+    stadium-shaped nodes off the edge of the final SVG.
+
+    Exact geometry isn't the goal (this only feeds getBBox() for layout),
+    so bezier control points are folded in as extra points around the
+    endpoints -- a deliberately generous, conservative box rather than a
+    tight one -- but arcs get their true extrema (see _arc_extrema) since
+    they're common enough in mermaid's shape library to be worth doing
+    properly rather than padding generously.
+    """
+    if not d:
+        return {"x": 0, "y": 0, "width": 0, "height": 0}
+
+    xs: list[float] = []
+    ys: list[float] = []
+    cx = cy = 0.0
+    start_x = start_y = 0.0
+    cmd = None
+    i, n = 0, len(d)
+    first_pair_of_cmd = True
+    while i < n:
+        ch = d[i]
+        if ch in _PATH_CMD_CHARS:
+            cmd = ch
+            first_pair_of_cmd = True
+            i += 1
+            continue
+        if ch.isspace() or ch == ",":
+            i += 1
+            continue
+        if cmd is None:
+            i += 1
+            continue
+        if cmd.upper() == "Z":
+            cx, cy = start_x, start_y
+            xs.append(cx)
+            ys.append(cy)
+            cmd = None
+            continue
+
+        argc = _PATH_ARGC[cmd.upper()]
+        is_rel = cmd.islower()
+        group: list[float] = []
+        while len(group) < argc:
+            m = _PATH_NUM_RE.match(d, i)
+            if not m:
+                break
+            group.append(float(m.group()))
+            i = m.end()
+            while i < n and (d[i].isspace() or d[i] == ","):
+                i += 1
+        if len(group) < argc:
+            break  # malformed tail -- stop rather than misparse
+
+        effective_cmd = cmd.upper()
+        if effective_cmd == "M" and not first_pair_of_cmd:
+            effective_cmd = "L"  # subsequent pairs after M are implicit lineto
+
+        if effective_cmd == "H":
+            nx = cx + group[0] if is_rel else group[0]
+            ny = cy
+            xs.append(nx); ys.append(ny)
+        elif effective_cmd == "V":
+            nx = cx
+            ny = cy + group[0] if is_rel else group[0]
+            xs.append(nx); ys.append(ny)
+        elif effective_cmd == "A":
+            rx, ry, rot, laf, sf, ex, ey = group
+            nx = cx + ex if is_rel else ex
+            ny = cy + ey if is_rel else ey
+            rx, ry = abs(rx), abs(ry)
+            pts = _arc_extrema(cx, cy, rx, ry, rot, laf, sf, nx, ny)
+            xs.extend(p[0] for p in pts)
+            ys.extend(p[1] for p in pts)
+        else:  # M, L, C, S, Q, T
+            for k in range(0, len(group), 2):
+                px, py = group[k], group[k + 1]
+                if is_rel:
+                    px += cx
+                    py += cy
+                xs.append(px)
+                ys.append(py)
+            nx, ny = xs[-1], ys[-1]
+
+        cx, cy = nx, ny
+        if effective_cmd == "M":
+            start_x, start_y = cx, cy
+        first_pair_of_cmd = False
+
     if not xs:
         return {"x": 0, "y": 0, "width": 0, "height": 0}
     return {"x": min(xs), "y": min(ys), "width": max(xs) - min(xs), "height": max(ys) - min(ys)}
