@@ -299,9 +299,17 @@ class Engine:
         )
         self._ctx = ctx
 
-    def _pump_jobs(self) -> None:
+    def _pump_jobs(self, stop_when: Optional[str] = None) -> None:
+        """Drain the Promise/microtask queue. If `stop_when` is a JS boolean
+        expression, stop as soon as it's true rather than draining the whole
+        job queue. Some diagrams (mindmap, via cytoscape) keep an internal
+        render loop scheduled indefinitely via requestAnimationFrame, built
+        for a long-lived interactive page, that never naturally empties the
+        job queue on its own in a one-shot headless render."""
         assert self._ctx is not None
         for _ in range(_RENDER_TIMEOUT_JOBS):
+            if stop_when is not None and self._ctx.eval(stop_when):
+                return
             try:
                 if not self._ctx.execute_pending_job():
                     return
@@ -343,7 +351,7 @@ class Engine:
             "  .then(r => { globalThis.__renderResult = r.svg; })\n"
             "  .catch(e => { globalThis.__renderError = (e && e.name ? e.name+': '+e.message : String(e)); });\n"
         )
-        self._pump_jobs()
+        self._pump_jobs(stop_when="!!globalThis.__renderResult || !!globalThis.__renderError")
 
         err = ctx.eval("globalThis.__renderError")
         if err:

@@ -146,6 +146,11 @@ globalThis.crypto = {
 const SVG_NS = "http://www.w3.org/2000/svg";
 const XHTML_NS = "http://www.w3.org/1999/xhtml";
 
+const _ZERO_PX_PROPS = new Set([
+  "padding-left", "padding-right", "padding-top", "padding-bottom",
+  "margin-left", "margin-right", "margin-top", "margin-bottom",
+  "border-left-width", "border-right-width", "border-top-width", "border-bottom-width",
+]);
 function CSSStyleDecl() {
   const store = {};
   return new Proxy(store, {
@@ -153,7 +158,7 @@ function CSSStyleDecl() {
       if (p === "cssText") return Object.entries(t).map(([k,v])=>`${k}:${v}`).join(";");
       if (p === "setProperty") return (k,v) => { t[k]=v; };
       if (p === "removeProperty") return (k) => { delete t[k]; };
-      if (p === "getPropertyValue") return (k) => t[k] || "";
+      if (p === "getPropertyValue") return (k) => t[k] || (_ZERO_PX_PROPS.has(k) ? "0px" : "");
       return t[p] || "";
     },
     set(t, p, v) { t[p] = v; return true; }
@@ -195,6 +200,11 @@ class Node {
     return c;
   }
   get ownerDocument() { return globalThis.__document; }
+  getRootNode() {
+    let n = this;
+    while (n.parentNode) n = n.parentNode;
+    return n;
+  }
   get firstChild() { return this.childNodes[0] || null; }
   get lastChild() { return this.childNodes[this.childNodes.length-1] || null; }
   get children() { return this.childNodes.filter(c => c.nodeType === 1); }
@@ -246,6 +256,20 @@ class Element extends Node {
   querySelector(sel) { return __querySelector(this, sel); }
   querySelectorAll(sel) { return __querySelectorAll(this, sel); }
   matches(sel) { return __matches(this, sel); }
+  getElementsByTagName(tag) {
+    const out = [];
+    __walk(this, (el) => { if (el !== this && (tag === "*" || el.tagName === tag)) out.push(el); });
+    return out;
+  }
+  get clientWidth() { return __resolveElementSizePx(this, "width"); }
+  get clientHeight() { return __resolveElementSizePx(this, "height"); }
+  get offsetWidth() { return __resolveElementSizePx(this, "width"); }
+  get offsetHeight() { return __resolveElementSizePx(this, "height"); }
+  getContext(type) {
+    if (this.tagName !== "canvas" || type !== "2d") return null;
+    if (!this._ctx2d) this._ctx2d = __makeCanvas2dContext(this);
+    return this._ctx2d;
+  }
   get textContent() {
     return this.childNodes.map(c => c.nodeType===3 ? c.textContent : c.textContent).join("");
   }
@@ -258,6 +282,12 @@ class Element extends Node {
   get outerHTML() { return __serialize(this, false); }
   // ---- SVG geometry: the important part ----
   getBBox() { return __computeBBox(this); }
+  getBoundingClientRect() {
+    const fontSize = __resolveHtmlFontSizePx(this);
+    const m = globalThis.__measureTextFull(this.textContent, fontSize, "DejaVu Sans", "normal", "normal");
+    const width = m.width, height = m.ascent + m.descent + 4; // +line-box slack
+    return { x: 0, y: 0, width, height, top: 0, left: 0, right: width, bottom: height };
+  }
   getComputedTextLength() {
     if (this.tagName !== "text" && this.tagName !== "tspan") return 0;
     const font = __resolveFont(this);
@@ -335,6 +365,75 @@ function __resolveCssProp(el, prop) {
     if (prop in rule.decls && __matches(el, rule.selectors)) value = rule.decls[prop];
   }
   return value;
+}
+
+function __resolveElementSizePx(el, dim) {
+  const styleProp = dim === "width" ? "width" : "height";
+  const s = el.style;
+  if (s && s.cssText) {
+    const m = new RegExp(styleProp + ":\\s*([\\d.]+)px").exec(s.cssText);
+    if (m) return parseFloat(m[1]);
+  }
+  // <canvas>/<img> etc. use the width/height IDL attribute directly,
+  // not CSS -- and a mindmap has no real container to measure, so this
+  // is the fallback cytoscape's layout bounding box ends up using.
+  if (el[dim] !== undefined && el[dim] !== null) return el[dim];
+  return 1000;
+}
+
+function __resolveHtmlFontSizePx(el) {
+  let n = el;
+  while (n && n.nodeType === 1) {
+    const s = n.style;
+    if (s && s.cssText) {
+      const m = /font-size:\s*([\d.]+)px/.exec(s.cssText);
+      if (m) return parseFloat(m[1]);
+    }
+    n = n.parentNode;
+  }
+  return 16;
+}
+
+function __makeCanvas2dContext(canvasEl) {
+  const noop = () => {};
+  const ctx = {
+    canvas: canvasEl,
+    // Paint state -- plain read/write properties, nothing reads them back.
+    fillStyle: "#000", strokeStyle: "#000", lineWidth: 1, lineCap: "butt",
+    lineJoin: "miter", miterLimit: 10, globalAlpha: 1, globalCompositeOperation: "source-over",
+    font: "10px sans-serif", textAlign: "start", textBaseline: "alphabetic",
+    shadowColor: "rgba(0,0,0,0)", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0,
+    lineDashOffset: 0, imageSmoothingEnabled: true,
+    // Path/paint methods: pixels are never read back for mindmap (the
+    // final SVG comes from cytoscape's computed node positions), so
+    // these only need to not throw.
+    save: noop, restore: noop, beginPath: noop, closePath: noop,
+    moveTo: noop, lineTo: noop, arc: noop, arcTo: noop, ellipse: noop,
+    rect: noop, quadraticCurveTo: noop, bezierCurveTo: noop,
+    fill: noop, stroke: noop, clip: noop,
+    fillRect: noop, strokeRect: noop, clearRect: noop,
+    translate: noop, rotate: noop, scale: noop, transform: noop,
+    setTransform: noop, resetTransform: noop,
+    setLineDash: noop, getLineDash: () => [],
+    drawImage: noop, createLinearGradient: () => ({ addColorStop: noop }),
+    createRadialGradient: () => ({ addColorStop: noop }),
+    createPattern: () => null,
+    fillText: noop, strokeText: noop,
+    getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(Math.max(0, w) * Math.max(0, h) * 4), width: w, height: h }),
+    putImageData: noop, createImageData: (w, h) => ({ data: new Uint8ClampedArray(Math.max(0, w) * Math.max(0, h) * 4), width: w, height: h }),
+    // The one method whose real answer actually matters: cytoscape sizes
+    // and positions labels/nodes using this during layout.
+    measureText(str) {
+      const fpx = (() => {
+        const m = /(\d+(?:\.\d+)?)px/.exec(ctx.font || "");
+        return m ? parseFloat(m[1]) : 10;
+      })();
+      const w = globalThis.__measureText(String(str), fpx, "DejaVu Sans", "normal", "normal");
+      return { width: w, actualBoundingBoxLeft: 0, actualBoundingBoxRight: w,
+                actualBoundingBoxAscent: fpx * 0.8, actualBoundingBoxDescent: fpx * 0.2 };
+    },
+  };
+  return ctx;
 }
 
 function __resolveTextAnchor(el) {
@@ -613,7 +712,7 @@ function __parseInto(parent, html) {
 
 // --- document / window --------------------------------------------------
 class Document extends Node {
-  constructor() { super(); this.nodeType = 9; this.documentElement = null; this.head=null; this.body=null; }
+  constructor() { super(); this.nodeType = 9; this.documentElement = null; this.head=null; this.body=null; this._listeners = {}; }
   createElement(tag) { return new Element(tag, XHTML_NS); }
   createElementNS(ns, tag) { return new Element(tag, ns); }
   createTextNode(t) { return new TextNode(t); }
@@ -621,6 +720,11 @@ class Document extends Node {
   querySelector(sel) { return __querySelector(this, sel); }
   querySelectorAll(sel) { return __querySelectorAll(this, sel); }
   createDocumentFragment() { const f = new Element("#fragment"); return f; }
+  addEventListener(t, fn) { (this._listeners[t] = this._listeners[t]||[]).push(fn); }
+  removeEventListener(t, fn) {
+    if (this._listeners[t]) this._listeners[t] = this._listeners[t].filter(f=>f!==fn);
+  }
+  dispatchEvent() { return true; }
 }
 
 const document_ = new Document();
@@ -637,9 +741,9 @@ globalThis.removeEventListener = () => {};
 globalThis.dispatchEvent = () => true;
 globalThis.navigator = { userAgent: "mermaidx-quickjs" };
 globalThis.getComputedStyle = (el) => el.style;
-globalThis.requestAnimationFrame = (fn) => { fn(0); return 0; };
+globalThis.requestAnimationFrame = (fn) => { Promise.resolve().then(() => fn(0)); return 0; };
 globalThis.cancelAnimationFrame = () => {};
-globalThis.setTimeout = (fn, t) => { fn(); return 0; };
+globalThis.setTimeout = (fn, t) => { Promise.resolve().then(() => fn()); return 0; };
 globalThis.clearTimeout = () => {};
 globalThis.setInterval = () => 0;
 globalThis.clearInterval = () => {};

@@ -49,10 +49,13 @@ def _svg_aspect_ratio(svg_str: str) -> float:
     return w / h
 
 
-# mindmap needs a full Canvas 2D context shim (cytoscape's internal
-# renderer uses <canvas> directly) -- a much bigger undertaking than the
-# other fixes here. Tracked as a known gap rather than silently skipped.
-KNOWN_UNSUPPORTED = {"05_simple_mindmap"}
+# Historically mindmap needed a Canvas 2D shim (cytoscape's internal
+# layout/renderer touches <canvas> during init even for a one-shot
+# headless render). That's since been added -- see dom_shim.js's
+# __makeCanvas2dContext and the DOM methods around it -- so this set is
+# empty for now. Kept as a named place to list future gaps rather than
+# something disappearing silently into a plain skip.
+KNOWN_UNSUPPORTED: set[str] = set()
 
 
 @pytest.mark.parametrize("name", SAMPLE_NAMES)
