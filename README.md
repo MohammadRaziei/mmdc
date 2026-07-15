@@ -20,6 +20,16 @@ pip install mermaidx
 
 That's it — SVG, PNG, PDF, and ASCII output all work out of the box; nothing else to install.
 
+**Which install do you need?**
+
+- `pip install mermaidx` — this alone is enough for everything above. It gives you the default backend (`backend="js"`, the embedded JS engine this README is about) and nothing else to think about.
+- `pip install mermaidx[rust]` — adds the optional Rust backend (`mmdr`) for extra speed on top of that, selectable with `backend="rust"`.
+- `pip install mermaidx[all]` — the easy option: every optional backend, in one command.
+
+None of these need a system dependency, a system Mermaid/Node install, or even a compiler — including `[rust]`/`[all]`, which install prebuilt wheels, not source you build locally.
+
+There isn't really an equivalent to this in the Python ecosystem. Every other Mermaid-to-image tool reachable from Python — including the official `mermaid-cli` itself — works by driving an actual browser (Puppeteer/Chrome) or shelling out to a separate Node.js process. `mermaidx` is the only one that renders real, current Mermaid JS with no browser and no subprocess at all.
+
 > **Looking for `mmdc`?** That was this project's old name, renamed to `mermaidx` — see [History](#history) for why. `mmdc` is no longer published or maintained under that name; install `mermaidx` instead.
 
 ---
