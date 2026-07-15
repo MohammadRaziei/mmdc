@@ -20,6 +20,8 @@ pip install mermaidx
 
 That's it — SVG, PNG, PDF, and ASCII output all work out of the box; nothing else to install.
 
+> **Looking for `mmdc`?** That was this project's old name, renamed to `mermaidx` — see [History](#history) for why. `mmdc` is no longer published or maintained under that name; install `mermaidx` instead.
+
 ---
 
 ## Why mermaidx?
@@ -190,7 +192,8 @@ raw, w, h = svg_to_raw(svg)
 ### Additional backends (optional)
 
 ```bash
-pip install mermaidx[rust]
+pip install mermaidx[rust]   # just the mmdr backends
+pip install mermaidx[all]    # every optional backend + numpy support, in one go
 ```
 
 If [`mmdr`](https://github.com/mohammadraziei/mmdr) (a native-Rust Mermaid renderer) is installed, its backends become available too — same interface either way, and with a bonus: PDF/raw/numpy work even for backends that don't natively support them (mmdr's own `Diagram.pdf()` raises `NotImplementedError`; `mermaidx`'s doesn't, for *any* backend), because every backend shares the same `DiagramBase` — only `svg()` differs per backend, everything downstream of it (PNG/PDF/raw/numpy) is the same resvg + PDF-writer pipeline for all of them:
@@ -278,7 +281,7 @@ pytest tests/ -v
 
 - **mmdc, powered by [phasma](https://github.com/mohammadraziei/phasma)** — the original version of this project. It bundled a real (if small — around 20MB) headless browser, PhantomJS, and exposed an `async` Python API to match: rendering meant talking to a subprocess, so `async`/`await` genuinely mattered for concurrency.
 - **0.6.x** — a full rewrite: PhantomJS's engine couldn't parse modern Mermaid (v11's ES2022+ syntax) at all, so the whole browser was replaced with mermaid.js running inside QuickJS-ng against a hand-written DOM/SVG shim, with resvg for rasterization. No subprocess left to wait on, so the API became synchronous. Three backends appeared: `js` (this engine), plus `merman` and `mermaid-rs-renderer` via the optional [`mmdr`](https://github.com/mohammadraziei/mmdr) package.
-- **0.7.x, renamed to mermaidx** — same engine, new name. The old name, `mmdc`, was identical to the official Mermaid CLI's own binary name (`@mermaid-js/mermaid-cli` installs a command called `mmdc`) — a real collision, not just a branding concern. Renamed early, while it still could be.
+- **0.7.x, renamed to mermaidx** — same engine, new name. The old name, `mmdc`, was identical to the official Mermaid CLI's own binary name (`@mermaid-js/mermaid-cli` installs a command called `mmdc`) — a real collision, not just a branding concern. Renamed early, while it still could be. **If you have `mmdc` pinned anywhere (`requirements.txt`, a Dockerfile, CI config), switch it to `mermaidx` — the old name isn't maintained or published anymore.**
 
 ---
 
