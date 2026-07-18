@@ -29,7 +29,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-  "pytest-cov"
+  "pytest-cov", "psutil"
 ]
 rust = [ "mmdr" ]
 v8 = [ "mini-racer" ]
