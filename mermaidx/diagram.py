@@ -81,11 +81,10 @@ def _get_engine_by_name(name: str):
                 else:
                     raise ValueError(f"Unknown JS engine {name!r}; expected 'quickjs' or 'v8'.")
                 e.start()
-                # Some engine backends (e.g. engines.v8_engine, built on
-                # py_mini_racer) have background threads that don't join
-                # cleanly if the process exits without closing them first --
-                # register a clean shutdown so callers never have to think
-                # about this themselves.
+                # engines.v8_engine runs its V8 isolate in a child process
+                # (see that module's docstring for why) -- register a clean
+                # shutdown so it doesn't linger as an orphan if the process
+                # exits without closing it first.
                 atexit.register(e.close)
                 _engines[name] = e
     return _engines[name]

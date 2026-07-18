@@ -101,14 +101,14 @@ flowchart LR
     H -.same font, forced.-> D
 ```
 
-Everything happens in one process, no subprocess, no I/O:
+Everything happens in one process, no subprocess, no I/O — with one deliberate exception, `backend="v8"`, noted below.
 
-- **SVG** — mermaid.js runs inside QuickJS-ng (or, optionally, real V8 — see [JS engine: QuickJS vs V8](#js-engine-quickjs-vs-v8-optional)) against a minimal fake DOM/SVG implementation. The one thing a fake DOM can't fabricate — real text metrics (`getBBox`/`getComputedTextLength`) — is bridged back into Python (QuickJS) or reproduced exactly from a precomputed per-glyph advance-width table (V8), both reading the same bundled font.
+- **SVG** — mermaid.js runs inside QuickJS-ng (default, in-process) or, optionally, real V8 (`backend="v8"`, in its own child process — see [JS engine: QuickJS vs V8](#js-engine-quickjs-vs-v8-optional) for why) against a minimal fake DOM/SVG implementation. The one thing a fake DOM can't fabricate — real text metrics (`getBBox`/`getComputedTextLength`) — is bridged back into Python (QuickJS) or reproduced exactly from a precomputed per-glyph advance-width table (V8), both reading the same bundled font.
 - **PNG** — the SVG is rasterized by [resvg](https://pypi.org/project/resvg_py/), forced to use that *same* bundled font, so what mermaid measured during layout is exactly what gets painted.
 - **PDF** — a small hand-written PDF writer (stdlib `zlib`/`struct` only) embeds the rendered pixels directly. No Pillow, no Cairo, no reportlab — every mainstream "put an image in a PDF" library pulls in Pillow as a transitive dependency; this avoids that entirely.
 - **ASCII** — a completely separate, lightweight path via [termaid](https://pypi.org/project/termaid/) (pure Python, ~700KB, zero dependencies), which parses the Mermaid source itself rather than going through the SVG.
 
-Rendering is CPU-bound, synchronous, single-process — there's no browser or subprocess to wait on, so there's nothing for `async` to usefully overlap. See [`mermaidx.render_many()`](#parallel-batch-rendering) below for real parallelism instead.
+Rendering is CPU-bound, synchronous — there's no browser to wait on, so there's nothing for `async` to usefully overlap. See [`mermaidx.render_many()`](#parallel-batch-rendering) below for real parallelism instead.
 
 Every backend is a small subclass of one shared `DiagramBase` — `Diagram` for `'quickjs'`/`'v8'`, `DiagramRust` for anything from the optional `mmdr` package. Subclasses only override the private `_svg()` hook; the public, cached `svg()`/`png()`/`pdf()`/`raw()`/`numpy()`/`ascii()`/`save()` are all written once in the base class and work identically regardless of which backend produced the SVG.
 
@@ -216,7 +216,7 @@ mermaidx.render(source, backend="v8")      # force V8 explicitly (raises ImportE
                                             # with an install hint if mini-racer isn't present)
 ```
 
-V8's JIT renders noticeably faster than QuickJS-ng's interpreter-only execution — 2-4.5x in our own benchmarks, scaling up with diagram size — for byte-for-byte identical output (V8 reproduces mermaidx's own font-metrics math exactly, not an approximation). The one exception is `mindmap`: its cytoscape-based layout schedules an animation loop that only QuickJS-ng knows how to safely bound in a one-shot headless render (see `mermaidx/engines/v8_engine.py`'s docstring for why) — use the default `backend="quickjs"` for those; `backend="v8"` raises rather than silently falling back.
+V8's JIT renders noticeably faster than QuickJS-ng's interpreter-only execution — 2-4.5x in our own benchmarks, scaling up with diagram size — for byte-for-byte identical output (V8 reproduces mermaidx's own font-metrics math exactly, not an approximation). The one exception is `mindmap`: its cytoscape-based layout schedules an animation loop that only QuickJS-ng knows how to safely bound in a one-shot headless render (see `mermaidx/engines/v8_engine.py`'s docstring for why) — use the default `backend="quickjs"` for those. `backend="v8"` runs its V8 isolate in a separate child process specifically so this case can't leak memory: a mindmap render still raises rather than succeeding, but the stuck process is killed outright and a fresh one takes over for the next render, with the OS guaranteeing 100% of that process's memory is reclaimed — verified to stay flat across repeated occurrences, not accumulate.
 
 ### Additional backends (optional)
 

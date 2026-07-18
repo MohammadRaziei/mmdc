@@ -40,32 +40,50 @@ codepoint outside the table (extremely unlikely -- DejaVu Sans covers
 Latin/Greek/Cyrillic/general punctuation/symbols) falls back to the
 font's own notdef-glyph width, exactly like the Python path does.
 
-Known limitation (unlike quickjs_engine.py)
+Why this runs in a subprocess, not a thread
 ---------------------------------------------
 quickjs_engine.py bounds runaway diagrams (mindmap/cytoscape's internal
-requestAnimationFrame-driven loop, built for a long-lived interactive page)
-via a capped, step-by-step job-pump loop. py_mini_racer exposes no
-equivalent manual microtask-pumping control -- it drains microtasks
-automatically inside a single eval() call -- so a diagram type whose JS
-never naturally stops scheduling work has no safety valve here and could
-block past `render_timeout_ms`. All diagram types tested for this project
-(flowchart/sequence/gantt/erDiagram/classDiagram) do not do this; mindmap
-is the one known type from mermaidx's own architecture notes that might.
+requestAnimationFrame-driven loop, built for a long-lived interactive page,
+meaningless for a one-shot headless render) via a capped, step-by-step
+job-pump loop. py_mini_racer exposes no equivalent manual microtask-pumping
+control -- it drains microtasks automatically inside a single eval() call --
+so a diagram type whose JS never naturally stops scheduling work has no
+safety valve here and can run past `render_timeout_ms`.
+
+An earlier version of this file ran V8 on a dedicated *thread* and, on
+timeout, simply abandoned that thread (Python can't forcibly kill a
+thread) and started a fresh one. That "worked" in the sense that
+subsequent renders succeeded, but it permanently leaked the abandoned
+thread's whole V8 isolate -- measured at ~140-160MB *every single time* --
+since nothing was ever able to reclaim it. Testing confirmed
+`set_hard_memory_limit()` doesn't help here either: mindmap's actual
+animation loop is CPU-bound (it just keeps rescheduling itself), not one
+that grows memory, so it never hits any heap ceiling to terminate it early.
+
+A *process* doesn't have this problem: the OS can force-terminate one
+unconditionally (`SIGKILL`, which cannot be blocked or ignored) and is
+guaranteed to reclaim 100% of its memory immediately, no matter what state
+it was stuck in. So the V8 isolate lives in a child process instead of a
+thread; on timeout, that child is killed outright (not asked to stop) and
+a fresh one is spawned for the next render. A killed render still raises
+in the caller, exactly as before, but nothing is leaked afterward.
+
+The child is started via the `spawn` method (a fresh interpreter), not
+`fork` -- V8 is documented as unsafe to fork after initialization, and
+forking a process that has other live threads (e.g. another Engine's own
+child-management thread) is a general, separate correctness hazard on top
+of that. `spawn` avoids both.
 """
 
 from __future__ import annotations
 
 import json
-import queue
+import multiprocessing as mp
 import re
 import threading
-from concurrent.futures import Future
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
-
-from py_mini_racer import MiniRacer
-from py_mini_racer._exc import MiniRacerBaseException
 
 from mermaidx.font_metrics import get_font
 from mermaidx.path_bbox import PATH_BBOX_JS
@@ -82,6 +100,8 @@ _DEFAULT_RENDER_TIMEOUT_MS = 8_000
 # Engine.render_svg's docstring): a diagram type whose JS never stops
 # scheduling itself. Lower is better there, since there's nothing to wait
 # for; raise it only if you have genuinely huge/slow diagrams timing out.
+
+_MP_CONTEXT = mp.get_context("spawn")
 
 
 class MermaidRenderError(RuntimeError):
@@ -146,193 +166,232 @@ def _measure_text_js() -> str:
 """
 
 
-class _DaemonSingleThreadExecutor:
+def _build_context():
+    """Boots one V8 isolate with mermaid.js loaded and ready to render.
+    Only ever called *inside* the child process (see _child_main)."""
+    from py_mini_racer import MiniRacer
+
+    ctx = MiniRacer()
+    ctx.eval("globalThis.__log = (s) => {};")
+    ctx.eval(_measure_text_js())
+    # Path bbox is pure geometry -- no Python callback needed at all,
+    # identical source to quickjs_engine.py.
+    ctx.eval(PATH_BBOX_JS)
+
+    with open(_DOM_SHIM_JS, encoding="utf-8") as f:
+        ctx.eval(f.read())
+    with open(_MERMAID_JS, encoding="utf-8") as f:
+        ctx.eval(f.read())
+    ctx.eval(
+        "globalThis.mermaid = (globalThis.__esbuild_esm_mermaid_nm.mermaid.default"
+        " || globalThis.__esbuild_esm_mermaid_nm.mermaid);"
+    )
+    return ctx
+
+
+def _render_svg_sync(ctx, render_count: int, code: str, theme: str,
+                      config: Optional[dict], css: Optional[str]) -> str:
+    render_id = f"gd{render_count}"
+
+    base_config = {"startOnLoad": False, "theme": theme or "default",
+                    "flowchart": {"htmlLabels": False}, "htmlLabels": False}
+    if config:
+        base_config.update(config)
+
+    ctx.eval('if (typeof __resetDocument === "function") { __resetDocument(); }')
+    ctx.eval(f"mermaid.initialize({json.dumps(base_config)});")
+
+    if css:
+        ctx.eval(f"globalThis.__css = {json.dumps(css)};")
+        ctx.eval(
+            "(function(){"
+            "  var el = document.getElementById('mermaidx-css') || document.createElement('style');"
+            "  el.setAttribute('id', 'mermaidx-css');"
+            "  el.textContent = __css;"
+            "  document.head.appendChild(el);"
+            "})();"
+        )
+
+    ctx.eval("globalThis.__renderResult = null; globalThis.__renderError = null;")
+    ctx.eval(
+        f"""
+mermaid.render({json.dumps(render_id)}, {json.dumps(code)})
+  .then(r => {{ globalThis.__renderResult = r.svg; }})
+  .catch(e => {{ globalThis.__renderError = (e && e.name ? e.name + ": " + e.message : String(e)); }});
+"""
+    )
+
+    err = ctx.eval("globalThis.__renderError")
+    if err:
+        raise MermaidRenderError(str(err))
+    svg = ctx.eval("globalThis.__renderResult")
+    if not svg:
+        raise MermaidRenderError("mermaid.render() produced no output (unknown error)")
+    svg = str(svg)
+    # Same mindmap centering patch as quickjs_engine.py -- see there for
+    # why this is needed (mermaid's own dead CSS rule for this class).
+    if "<style" in svg and "section-root" in svg:
+        svg = re.sub(
+            r"(<style[^>]*>)",
+            r"\1.section-root .label text{text-anchor:middle;}",
+            svg,
+            count=1,
+        )
+    return svg
+
+
+def _child_main(conn) -> None:
     """
-    A single-worker executor, like `ThreadPoolExecutor(max_workers=1)`, but
-    using a *daemon* thread. Regular ThreadPoolExecutor threads are joined
-    at interpreter exit no matter what (via an atexit hook registered deep
-    in `concurrent.futures.thread`) -- fine normally, but Engine.render_svg
-    deliberately abandons a wedged worker thread rather than waiting on it
-    forever (see its docstring for why), and a leaked non-daemon thread
-    would then block the whole process from exiting even after the Engine
-    itself has already recovered. A daemon thread is killed by the OS
-    process teardown instead, so an abandoned one no longer matters.
+    Entry point of the child process (see Engine -- one child == one V8
+    isolate). Boots V8 once, then serves render requests from the parent
+    over `conn` until told to stop or the pipe closes. Never returns
+    normally except on shutdown -- if this hangs, the parent's only
+    recourse is killing the process outright (see module docstring), which
+    is exactly the point: nothing in here needs to handle that gracefully.
     """
+    try:
+        ctx = _build_context()
+        conn.send(("ready", None))
+    except Exception as exc:  # noqa: BLE001 -- report *any* boot failure to the parent
+        conn.send(("boot_error", f"{type(exc).__name__}: {exc}"))
+        return
 
-    def __init__(self, thread_name: str) -> None:
-        self._queue: "queue.Queue" = queue.Queue()
-        self._thread = threading.Thread(target=self._worker, name=thread_name, daemon=True)
-        self._thread.start()
+    render_count = 0
+    while True:
+        try:
+            msg = conn.recv()
+        except (EOFError, OSError):
+            return  # parent went away
+        if msg is None:  # shutdown sentinel
+            return
 
-    def _worker(self) -> None:
-        while True:
-            item = self._queue.get()
-            if item is None:  # shutdown sentinel
-                return
-            fn, args, future = item
-            if not future.set_running_or_notify_cancel():
-                continue
-            try:
-                future.set_result(fn(*args))
-            except BaseException as exc:  # noqa: BLE001 -- propagate anything to the caller
-                future.set_exception(exc)
-
-    def submit(self, fn, *args) -> Future:
-        future: Future = Future()
-        self._queue.put((fn, args, future))
-        return future
-
-    def shutdown(self) -> None:
-        self._queue.put(None)
-        self._thread.join(timeout=5)  # a wedged worker won't join -- that's fine, it's a daemon
+        render_count += 1
+        code, theme, config, css = msg
+        try:
+            svg = _render_svg_sync(ctx, render_count, code, theme, config, css)
+            conn.send(("ok", svg))
+        except MermaidRenderError as exc:
+            conn.send(("render_error", str(exc)))
+        except Exception as exc:  # noqa: BLE001 -- report *any* other failure to the parent
+            conn.send(("render_error", f"{type(exc).__name__}: {exc}"))
 
 
 class Engine:
     """
-    One Engine = one V8 isolate with mermaid.js loaded, pinned to one
-    dedicated worker thread (mirrors quickjs_engine.Engine's shape/lifecycle
-    exactly, so mermaidx.diagram doesn't need to know which one it has).
+    One Engine = one child process with a V8 isolate + mermaid.js loaded
+    (see module docstring for why a process, not a thread). Same
+    start()/close()/started/render_svg() surface as
+    quickjs_engine.Engine -- diagram.py doesn't need to know which one it
+    has.
     """
 
     def __init__(self, render_timeout_ms: int = _DEFAULT_RENDER_TIMEOUT_MS) -> None:
-        self._executor: Optional[_DaemonSingleThreadExecutor] = None
-        self._ctx: Optional[MiniRacer] = None
-        self._render_count = 0
+        self._process: Optional[mp.process.BaseProcess] = None
+        self._parent_conn = None
         self._render_timeout_ms = render_timeout_ms
         self._lock = threading.Lock()
 
     # -- lifecycle ------------------------------------------------------------
 
     def start(self) -> None:
-        if self._executor is not None:
+        if self._process is not None:
             return
-        self._executor = _DaemonSingleThreadExecutor(thread_name="mermaidx-v8-engine")
-        self._executor.submit(self._init_context).result()
+        self._spawn()
+
+    def _spawn(self) -> None:
+        parent_conn, child_conn = _MP_CONTEXT.Pipe()
+        process = _MP_CONTEXT.Process(target=_child_main, args=(child_conn,), daemon=True)
+        process.start()
+        child_conn.close()  # only the child needs its end
+
+        # Booting -- loading mermaid.js -- can itself take a moment; give it
+        # the same generous timeout as a render, rather than a separate one.
+        if not parent_conn.poll(timeout=self._render_timeout_ms / 1000):
+            process.kill()
+            raise MermaidRenderError(
+                f"V8 engine failed to boot within {self._render_timeout_ms}ms."
+            )
+        status, payload = parent_conn.recv()
+        if status != "ready":
+            process.kill()
+            raise MermaidRenderError(f"V8 engine failed to boot: {payload}")
+
+        self._process = process
+        self._parent_conn = parent_conn
 
     def close(self) -> None:
-        if self._executor is not None:
-            self._executor.shutdown()
-            self._executor = None
-            self._ctx = None
+        with self._lock:
+            process, self._process = self._process, None
+            conn, self._parent_conn = self._parent_conn, None
+        if process is None:
+            return
+        try:
+            if conn is not None:
+                conn.send(None)  # ask nicely first
+            process.join(timeout=2)
+        except Exception:  # noqa: BLE001 -- best-effort; kill below covers any failure
+            pass
+        if process.is_alive():
+            process.kill()  # SIGKILL -- guaranteed, immediate, no leak
+            process.join(timeout=2)
+        if conn is not None:
+            conn.close()
 
     @property
     def started(self) -> bool:
-        return self._executor is not None
-
-    # -- worker-thread-only methods ---------------------------------------
-
-    def _init_context(self) -> None:
-        ctx = MiniRacer()
-        ctx.eval("globalThis.__log = (s) => {};")
-        ctx.eval(_measure_text_js())
-        # Path bbox is pure geometry -- no Python callback needed at all,
-        # identical source to quickjs_engine.py.
-        ctx.eval(PATH_BBOX_JS)
-
-        with open(_DOM_SHIM_JS, encoding="utf-8") as f:
-            ctx.eval(f.read(), timeout=self._render_timeout_ms)
-        with open(_MERMAID_JS, encoding="utf-8") as f:
-            ctx.eval(f.read(), timeout=self._render_timeout_ms)
-        ctx.eval(
-            "globalThis.mermaid = (globalThis.__esbuild_esm_mermaid_nm.mermaid.default"
-            " || globalThis.__esbuild_esm_mermaid_nm.mermaid);"
-        )
-        self._ctx = ctx
-
-    def _render_svg_sync(self, code: str, theme: str, config: Optional[dict], css: Optional[str]) -> str:
-        assert self._ctx is not None
-        ctx = self._ctx
-        self._render_count += 1
-        render_id = f"gd{self._render_count}"
-
-        base_config = {"startOnLoad": False, "theme": theme or "default",
-                        "flowchart": {"htmlLabels": False}, "htmlLabels": False}
-        if config:
-            base_config.update(config)
-
-        ctx.eval('if (typeof __resetDocument === "function") { __resetDocument(); }',
-                  timeout=self._render_timeout_ms)
-        ctx.eval(f"mermaid.initialize({json.dumps(base_config)});", timeout=self._render_timeout_ms)
-
-        if css:
-            ctx.eval(f"globalThis.__css = {json.dumps(css)};")
-            ctx.eval(
-                "(function(){"
-                "  var el = document.getElementById('mermaidx-css') || document.createElement('style');"
-                "  el.setAttribute('id', 'mermaidx-css');"
-                "  el.textContent = __css;"
-                "  document.head.appendChild(el);"
-                "})();",
-                timeout=self._render_timeout_ms,
-            )
-
-        ctx.eval("globalThis.__renderResult = null; globalThis.__renderError = null;")
-        try:
-            ctx.eval(
-                f"""
-mermaid.render({json.dumps(render_id)}, {json.dumps(code)})
-  .then(r => {{ globalThis.__renderResult = r.svg; }})
-  .catch(e => {{ globalThis.__renderError = (e && e.name ? e.name + ": " + e.message : String(e)); }});
-""",
-                timeout=self._render_timeout_ms,
-            )
-        except MiniRacerBaseException as exc:
-            raise MermaidRenderError(f"V8 execution error: {exc}") from exc
-
-        err = ctx.eval("globalThis.__renderError")
-        if err:
-            raise MermaidRenderError(str(err))
-        svg = ctx.eval("globalThis.__renderResult")
-        if not svg:
-            raise MermaidRenderError("mermaid.render() produced no output (unknown error)")
-        svg = str(svg)
-        # Same mindmap centering patch as quickjs_engine.py -- see there for
-        # why this is needed (mermaid's own dead CSS rule for this class).
-        if "<style" in svg and "section-root" in svg:
-            svg = re.sub(
-                r"(<style[^>]*>)",
-                r"\1.section-root .label text{text-anchor:middle;}",
-                svg,
-                count=1,
-            )
-        return svg
+        return self._process is not None
 
     # -- public, thread-safe entry point ---------------------------------------
 
     def render_svg(self, code: str, theme: str, config: Optional[dict], css: Optional[str]) -> str:
         """
-        Submits the render to the dedicated worker thread and waits for it,
-        with a Python-level timeout as a safety net independent of
-        py_mini_racer's own per-eval `timeout=` (see the "Known limitation"
-        note in this module's docstring: a diagram whose JS never stops
-        scheduling work -- e.g. mindmap -- can run past that per-eval
-        timeout since it keeps rescheduling itself rather than blocking in
-        one eval() call).
-
-        Python cannot forcibly kill a running thread, so a timed-out call
-        leaves one worker thread permanently stuck inside V8. Rather than
-        letting that wedge every future render through this same Engine
-        (max_workers=1 means everything else would simply queue forever
-        behind it), this discards the stuck executor and starts a fresh one
-        for subsequent calls -- the current call still raises, but the
-        Engine heals itself instead of becoming permanently unusable.
+        Sends the render to the child process and waits for a reply, with
+        a timeout. A diagram whose JS never stops scheduling work (e.g.
+        mindmap -- see module docstring) means no reply ever comes; when
+        that happens, the child is killed outright (SIGKILL -- the OS
+        reclaims all of its memory immediately, unconditionally) and a
+        fresh one is spawned for the next call. The current call still
+        raises, but nothing is left behind afterward -- unlike the
+        thread-based approach this replaced, which had to choose between
+        hanging forever or leaking the isolate permanently.
         """
         with self._lock:
-            executor = self._executor
-        if executor is None:
+            process, conn = self._process, self._parent_conn
+        if process is None or conn is None:
             raise RuntimeError("Engine is not started.")
 
-        future = executor.submit(self._render_svg_sync, code, theme, config, css)
-        try:
-            return future.result(timeout=self._render_timeout_ms / 1000)
-        except TimeoutError as exc:
+        conn.send((code, theme, config, css))
+        if not conn.poll(timeout=self._render_timeout_ms / 1000):
             with self._lock:
-                if self._executor is executor:  # don't clobber a healing done by another thread
-                    self._executor = None
-                    self._ctx = None
-            self.start()  # fresh executor + context for subsequent calls
+                if self._process is process:  # don't clobber a respawn done by another thread
+                    self._process = None
+                    self._parent_conn = None
+            process.kill()  # SIGKILL: guaranteed to free 100% of this process's memory
+            process.join(timeout=2)
+            conn.close()
+            self.start()  # fresh child for subsequent calls
             raise MermaidRenderError(
-                f"Render exceeded {self._render_timeout_ms}ms and was abandoned "
-                "(the underlying V8 worker thread cannot be interrupted, so a new "
-                "engine instance was started for subsequent renders)."
-            ) from exc
+                f"Render exceeded {self._render_timeout_ms}ms and was killed "
+                "(this diagram's JS never stopped scheduling work -- see "
+                "engines/v8_engine.py's module docstring for why). A fresh V8 "
+                "engine has been started for subsequent renders; no memory was "
+                "leaked by this one. Use backend=\"quickjs\" for this diagram."
+            )
+
+        try:
+            status, payload = conn.recv()
+        except (EOFError, OSError) as exc:
+            # The child died on its own (e.g. crashed) rather than just
+            # hanging -- same recovery as the timeout case above.
+            with self._lock:
+                if self._process is process:
+                    self._process = None
+                    self._parent_conn = None
+            process.join(timeout=2)
+            conn.close()
+            self.start()
+            raise MermaidRenderError("The V8 engine process died unexpectedly.") from exc
+
+        if status == "ok":
+            return payload
+        raise MermaidRenderError(payload)
