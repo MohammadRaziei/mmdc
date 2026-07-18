@@ -139,6 +139,43 @@ globalThis.crypto = {
   },
 };
 
+// Minimal structuredClone polyfill -- QuickJS has no built-in Structured
+// Clone algorithm, but mermaid's pie chart (cloning its default config) and
+// C4 diagram (deep-copying point arrays while laying out arrows) both call
+// it directly. Every call site here only needs a deep copy of plain data
+// (objects/arrays/Maps/Sets/Dates/RegExps), never the transferable-object or
+// cross-realm parts of the real algorithm, so a straightforward recursive
+// clone with cycle tracking (via a Map, same as the spec) is enough.
+globalThis.structuredClone = function structuredClone(value, _seen) {
+  const seen = _seen || new Map();
+  if (value === null || typeof value !== "object") return value;
+  if (seen.has(value)) return seen.get(value);
+  if (value instanceof Date) return new Date(value.getTime());
+  if (value instanceof RegExp) return new RegExp(value.source, value.flags);
+  if (Array.isArray(value)) {
+    const out = [];
+    seen.set(value, out);
+    for (const item of value) out.push(structuredClone(item, seen));
+    return out;
+  }
+  if (value instanceof Map) {
+    const out = new Map();
+    seen.set(value, out);
+    for (const [k, v] of value) out.set(structuredClone(k, seen), structuredClone(v, seen));
+    return out;
+  }
+  if (value instanceof Set) {
+    const out = new Set();
+    seen.set(value, out);
+    for (const item of value) out.add(structuredClone(item, seen));
+    return out;
+  }
+  const out = {};
+  seen.set(value, out);
+  for (const key of Object.keys(value)) out[key] = structuredClone(value[key], seen);
+  return out;
+};
+
 // Minimal fake browser environment for mermaid.js layout-only rendering.
 // getBBox / getComputedTextLength call back into Python (via __measureText),
 // which reads real glyph widths from a bundled font (see font_metrics.py).
@@ -788,6 +825,7 @@ globalThis.addEventListener = () => {};
 globalThis.removeEventListener = () => {};
 globalThis.dispatchEvent = () => true;
 globalThis.navigator = { userAgent: "mermaidx-quickjs" };
+globalThis.screen = { width: 1920, height: 1080, availWidth: 1920, availHeight: 1040, colorDepth: 24, pixelDepth: 24 };
 globalThis.getComputedStyle = (el) => el.style;
 globalThis.requestAnimationFrame = (fn) => { Promise.resolve().then(() => fn(0)); return 0; };
 globalThis.cancelAnimationFrame = () => {};

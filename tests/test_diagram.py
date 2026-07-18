@@ -231,6 +231,45 @@ def test_svg_to_raw_standalone_utility():
     assert len(raw) == 40 * 40 * 4
 
 
+def test_gantt_diagram_renders():
+    """Regression: mermaid's gantt renderer read `.parentElement.offsetWidth`
+    off the rendered container, but the DOM shim's Node class had no
+    parentElement getter at all, so this raised
+    'cannot read property offsetWidth of undefined' (issue #13)."""
+    svg = mermaidx.render(
+        "gantt\n"
+        "    section Section\n"
+        "    Completed :done, des1, 2014-01-06, 2014-01-08\n"
+        "    Active    :active, des2, 2014-01-07, 3d\n"
+    ).svg()
+    assert svg.startswith("<svg")
+    assert 'aria-roledescription="gantt"' in svg
+
+
+def test_pie_diagram_renders():
+    """Regression: mermaid's default-config cloning calls the real
+    structuredClone(), which QuickJS doesn't provide at all, so this raised
+    'ReferenceError: structuredClone is not defined' (issue #15)."""
+    svg = mermaidx.render('pie\n"Dogs" : 386\n"Cats" : 85.9\n"Rats" : 15\n').svg()
+    assert svg.startswith("<svg")
+    assert 'aria-roledescription="pie"' in svg
+
+
+def test_c4_diagram_renders():
+    """Regression: mermaid's C4 layout reads `screen.availWidth` to decide
+    when to wrap elements onto a new row, but there's no `screen` global in
+    QuickJS at all, so this raised 'ReferenceError: screen is not defined'
+    (issue #15)."""
+    svg = mermaidx.render(
+        "C4Context\n"
+        'title System Context diagram\n'
+        'Person(customerA, "Customer A", "A bank customer.")\n'
+        'System(SystemAA, "Banking System", "Lets customers view accounts.")\n'
+        'Rel(customerA, SystemAA, "Uses")\n'
+    ).svg()
+    assert svg.startswith("<svg")
+
+
 def _first_node_box_height(svg: str) -> float:
     import re
     return float(re.findall(r'label-container[^>]*height="([0-9.]+)"', svg)[0])
@@ -251,3 +290,4 @@ def test_multiline_node_label_grows_box_height():
     assert h3 > h2, "3-line box should be taller than 2-line"
     # Each extra line adds roughly one line-step (dy=1.1em) — evenly spaced.
     assert (h2 - h1) == pytest.approx(h3 - h2, rel=0.2)
+    
