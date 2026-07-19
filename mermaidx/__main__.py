@@ -90,6 +90,11 @@ examples:
                         help="PDF margin e.g. '1cm' (default: 0)")
     parser.add_argument("-q", "--quiet", action="store_true",
                         help="Suppress informational messages (e.g. 'saved to ... bytes')")
+    parser.add_argument("--embed-font", action="store_true",
+                        help="SVG output only: embed the DejaVu Sans glyphs actually used "
+                             "as @font-face, so the SVG renders with correct label widths "
+                             "in a browser too, not just via mermaidx's own .png()/.pdf(). "
+                             "Requires fontTools (pip install mermaidx[embed]).")
 
     return parser
 
@@ -150,7 +155,7 @@ def main() -> None:
     d = mermaidx.render(source, backend=args.backend, **render_kwargs)
 
     if args.output is None:
-        sys.stdout.buffer.write(d.svg().encode("utf-8"))
+        sys.stdout.buffer.write(d.svg(embed_font=args.embed_font).encode("utf-8"))
         return
 
     output = Path(args.output)
@@ -160,6 +165,8 @@ def main() -> None:
     if suffix == ".pdf":
         d.save(str(output), **raster_kwargs, pdf_format=args.pdf_format,
                pdf_landscape=args.landscape, pdf_margin=args.margin)
+    elif suffix == ".svg":
+        d.save(str(output), **raster_kwargs, embed_font=args.embed_font)
     else:
         d.save(str(output), **raster_kwargs)
 

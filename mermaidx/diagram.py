@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Optional
 from mermaidx.ascii import render_ascii
 from mermaidx.engines.quickjs_engine import Engine as _QuickJSEngine
 from mermaidx.engines.quickjs_engine import MermaidRenderError as _QuickJSRenderError
+from mermaidx.font_embed import embed_dejavu_font
 from mermaidx.pdf_writer import png_to_pdf
 from mermaidx.png_decode import decode_png_rgba, decode_png
 from mermaidx.raster import render_png
@@ -136,9 +137,23 @@ class DiagramBase:
         """Uncached SVG computation. Subclasses must override this."""
         raise NotImplementedError
 
-    def svg(self) -> str:
-        """Return the diagram as an SVG string (computed once, then cached)."""
-        return self._cached("svg", {}, self._svg)
+    def svg(self, *, embed_font: bool = False) -> str:
+        """Return the diagram as an SVG string (computed once, then cached).
+
+        Args:
+            embed_font: If True, inline the exact DejaVu Sans glyphs this
+                diagram uses as base64 @font-face rules, so opening the SVG
+                directly in a browser paints text with the same metrics
+                used to lay it out (see mermaidx.font_embed). Off by
+                default: it needs fontTools (`pip install mermaidx[embed]`)
+                and makes the file bigger; mermaidx's own .png()/.pdf()
+                output is unaffected either way, since resvg is already
+                told to use this exact font regardless.
+        """
+        base = self._cached("svg", {}, self._svg)
+        if not embed_font:
+            return base
+        return self._cached("svg_embed_font", {}, lambda: embed_dejavu_font(base))
 
     # ------------------------------------------------------------------
     # PNG
@@ -348,7 +363,7 @@ class DiagramBase:
             )
 
         if fmt == "svg":
-            path.write_text(self.svg(), encoding="utf-8")
+            path.write_text(self.svg(**format_opts), encoding="utf-8")
         elif fmt == "png":
             path.write_bytes(self.png(width=width, height=height, scale=scale, background=background))
         elif fmt == "pdf":
