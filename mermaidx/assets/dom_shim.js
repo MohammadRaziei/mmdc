@@ -238,6 +238,19 @@ class Node {
     c.parentNode = null;
     return c;
   }
+  // ParentNode.append()/prepend(): newer DOM API distinct from
+  // appendChild() -- accepts multiple args and plain strings (which get
+  // wrapped in a text node). Some diagrams (e.g. venn, via a d3-style
+  // text-wrapping helper) call element.append(node) directly instead of
+  // appendChild(), which the old-style shim never implemented.
+  append(...nodes) {
+    for (const n of nodes) this.appendChild(typeof n === "string" ? new TextNode(n) : n);
+  }
+  prepend(...nodes) {
+    for (const n of nodes.reverse()) {
+      this.insertBefore(typeof n === "string" ? new TextNode(n) : n, this.firstChild);
+    }
+  }
   get ownerDocument() { return globalThis.__document; }
   // DOM spec: parentElement is parentNode, but only when that parent is
   // itself an Element (nodeType 1) -- e.g. a node whose parent is the
@@ -750,9 +763,17 @@ function __esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").
 function __serialize(el, innerOnly) {
   function ser(n) {
     if (n.nodeType === 3) return __esc(n.textContent);
-    const attrs = Object.entries(n._attrs||{}).map(([k,v])=>` ${k}="${__esc(v)}"`).join("");
-    const styleText = n.style && n.style.cssText;
-    const styleAttr = styleText ? ` style="${__esc(styleText)}"` : "";
+    const attrEntries = Object.entries(n._attrs||{}).filter(([k]) => k !== "style");
+    const attrs = attrEntries.map(([k,v])=>` ${k}="${__esc(v)}"`).join("");
+    // A "style" set via setAttribute("style", ...) and properties set via
+    // the live el.style.foo = ... API both need to end up in the SAME
+    // style="..." attribute -- emitting two separate style= attributes
+    // (one from _attrs, one from n.style.cssText) is invalid SVG/XML and
+    // resvg rejects it outright ("attribute 'style' ... already defined").
+    const attrStyle = n._attrs && n._attrs.style;
+    const liveStyle = n.style && n.style.cssText;
+    const combinedStyle = [attrStyle, liveStyle].filter(Boolean).join(";");
+    const styleAttr = combinedStyle ? ` style="${__esc(combinedStyle)}"` : "";
     const inner = n.childNodes.map(ser).join("");
     return `<${n.tagName}${attrs}${styleAttr}>${inner}</${n.tagName}>`;
   }
@@ -822,6 +843,7 @@ globalThis.document = document_;
 globalThis.__document = document_;
 
 globalThis.window = globalThis;
+document_.defaultView = globalThis;
 globalThis.self = globalThis;
 globalThis.addEventListener = () => {};
 globalThis.removeEventListener = () => {};

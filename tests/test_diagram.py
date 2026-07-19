@@ -364,3 +364,61 @@ def test_multiline_node_label_grows_box_height():
     assert h3 > h2, "3-line box should be taller than 2-line"
     # Each extra line adds roughly one line-step (dy=1.1em) — evenly spaced.
     assert (h2 - h1) == pytest.approx(h3 - h2, rel=0.2)
+
+
+TREEMAP = (
+    'treemap-beta\n'
+    '    "Section 1"\n'
+    '        "Leaf 1.1": 12\n'
+    '        "Section 1.2"\n'
+    '        "Leaf 1.2.1": 12\n'
+    '    "Section 2"\n'
+    '        "Leaf 2.1": 20\n'
+    '        "Leaf 2.2": 25\n'
+)
+
+VENN = (
+    'venn-beta\n'
+    '  title "Team overlap"\n'
+    '  set Frontend\n'
+    '  set Backend\n'
+    '  union Frontend,Backend["APIs"]\n'
+)
+
+
+def test_treemap_renders_without_error():
+    """Regression for issue #19: element.ownerDocument.defaultView was
+    missing from the DOM shim, so d3's cross-window getComputedStyle
+    helper (`e.ownerDocument.defaultView.getComputedStyle(...)`) crashed
+    with "cannot read property 'getComputedStyle' of undefined"."""
+    svg = mermaidx.render(TREEMAP).svg()
+    assert svg.startswith("<svg")
+    for label in ("Section 1", "Section 2", "Leaf 1.1", "Leaf 2.2"):
+        assert label in svg
+
+
+def test_treemap_rasterizes_without_duplicate_style_attribute():
+    """Regression: once #19 was fixed, the treemap label styling combined
+    an attribute set via setAttribute('style', ...) with one set via the
+    live el.style API, and the (old) serializer emitted two separate
+    style="..." attributes on the same element -- invalid SVG/XML that
+    resvg rejected with "attribute 'style' ... already defined"."""
+    png = mermaidx.render(TREEMAP).png()
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_venn_renders_without_error():
+    """Regression for issue #21: mermaid's venn diagram calls the modern
+    Element.append() (distinct from appendChild(), accepts multiple args
+    and bare strings) while wrapping set labels, which the DOM shim's Node
+    class never implemented, crashing with "TypeError: not a function"."""
+    svg = mermaidx.render(VENN).svg()
+    assert svg.startswith("<svg")
+    for label in ("Frontend", "Backend", "APIs"):
+        assert label in svg
+
+
+def test_venn_rasterizes():
+    png = mermaidx.render(VENN).png()
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    
