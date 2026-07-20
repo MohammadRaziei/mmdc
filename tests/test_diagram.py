@@ -421,4 +421,59 @@ def test_venn_renders_without_error():
 def test_venn_rasterizes():
     png = mermaidx.render(VENN).png()
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
-    
+
+
+def test_multiline_edge_label_is_centered_on_its_background():
+    """Regression for issue #17: a multi-line edge label (e.g. "Two
+    line<br/>edge comment") rendered with its text baseline well outside
+    its own background rectangle instead of centered inside it.
+
+    Root cause: __resolveTextPos() finds the tspan that really carries a
+    text element's paint position by walking down through single-child
+    chains. That works for one-line labels (a single positioning tspan),
+    but a multi-line label has one row-tspan PER LINE, so the walk broke
+    immediately at the outer <text> element and used its vestigial,
+    non-"em" y attribute instead of the first row's real y="...em"
+    dy="1.1em" position -- putting the computed bbox (and therefore the
+    centering transform) tens of pixels off from where the text actually
+    paints.
+
+    This asserts the label's own background rect really encloses (rather
+    than merely sits near) the text after the two are combined by their
+    respective transforms -- computed straight from the raw SVG so it
+    catches a regression even if both elements "look" present.
+    """
+    import re
+
+    code = (
+        "graph TB\n"
+        '    od>Odd shape]-- Two line<br/>edge comment --> ro(Rounded shape)\n'
+    )
+    svg = mermaidx.render(code).svg()
+
+    # Locate the edge label's own <g transform="translate(dx, dy)"> (the
+    # centering transform) and, inside it, the background rect plus the
+    # first row's accumulated y (own y="...em" + dy="1.1em").
+    m = re.search(
+        r'<g class="label"[^>]*transform="translate\(([-\d.]+), ?([-\d.]+)\)">'
+        r'.*?<rect class="background" x="([-\d.]+)" y="([-\d.]+)" '
+        r'width="([-\d.]+)" height="([-\d.]+)">',
+        svg, re.S,
+    )
+    assert m, "expected a positioned edge label with a background rect"
+    dx, dy, rx, ry, rw, rh = (float(v) for v in m.groups())
+
+    # First row tspan: y="-0.1em" dy="1.1em" -> real font-size units.
+    row = re.search(r'<text[^>]*>\s*<tspan[^>]*y="(-?[\d.]+)em"[^>]*dy="([\d.]+)em"', svg)
+    assert row, "expected the first row tspan with y/dy in em units"
+    font_size_guess = 16  # mermaid's default flowchart edge-label font-size
+    row_y = (float(row.group(1)) + float(row.group(2))) * font_size_guess
+
+    text_absolute_y = dy + row_y
+    rect_top = dy + ry
+    rect_bottom = dy + ry + rh
+
+    assert rect_top <= text_absolute_y <= rect_bottom, (
+        f"text baseline y={text_absolute_y} falls outside its own "
+        f"background rect [{rect_top}, {rect_bottom}]"
+    )

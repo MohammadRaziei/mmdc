@@ -534,6 +534,38 @@ function __parseLen(str, fontSize) {
   return m[2] === "em" ? v * fontSize : v;
 }
 
+// Accumulates the effective x/y across a chain of ancestor->descendant
+// nodes, honoring x/y (absolute) and dx/dy (relative, "em"-aware via
+// __parseLen) at each step -- the same rule real SVG rendering uses when
+// resolving a tspan's painted position from its own attributes plus
+// whatever it inherited on the way down from its ancestors.
+function __accumulatePos(chain, fontSize) {
+  let x = 0, y = 0;
+  for (const n of chain) {
+    const xAttr = n.getAttribute && n.getAttribute("x");
+    const yAttr = n.getAttribute && n.getAttribute("y");
+    const dxAttr = n.getAttribute && n.getAttribute("dx");
+    const dyAttr = n.getAttribute && n.getAttribute("dy");
+    if (xAttr !== null) { const v = __parseLen(xAttr, fontSize); if (v !== null) x = v; }
+    if (yAttr !== null) { const v = __parseLen(yAttr, fontSize); if (v !== null) y = v; }
+    if (dxAttr !== null) { const v = __parseLen(dxAttr, fontSize); if (v !== null) x += v; }
+    if (dyAttr !== null) { const v = __parseLen(dyAttr, fontSize); if (v !== null) y += v; }
+  }
+  return { x, y };
+}
+
+// The chain of nodes from `root` down to `target` (inclusive of both),
+// found by walking target's parentNode pointers back up to root. Used to
+// resolve a specific descendant's position (e.g. a particular line's row
+// tspan) rather than whatever single-child chain __resolveTextPos would
+// otherwise follow.
+function __chainTo(root, target) {
+  const chain = [];
+  let n = target;
+  while (n) { chain.unshift(n); if (n === root) break; n = n.parentNode; }
+  return chain;
+}
+
 // Finds the effective x/y that will actually be used to paint this text
 // element. mermaid always writes its "real" position (y="-0.1em"
 // dy="1.1em", x="0") on the single positioning tspan wrapping the actual
@@ -545,21 +577,15 @@ function __parseLen(str, fontSize) {
 // alignment. This walks down through single-child chains to find the
 // element that really carries the position, honoring dy accumulation.
 function __resolveTextPos(el, fontSize) {
-  let n = el, x = 0, y = 0;
-  while (n) {
-    const xAttr = n.getAttribute && n.getAttribute("x");
-    const yAttr = n.getAttribute && n.getAttribute("y");
-    const dxAttr = n.getAttribute && n.getAttribute("dx");
-    const dyAttr = n.getAttribute && n.getAttribute("dy");
-    if (xAttr !== null) { const v = __parseLen(xAttr, fontSize); if (v !== null) x = v; }
-    if (yAttr !== null) { const v = __parseLen(yAttr, fontSize); if (v !== null) y = v; }
-    if (dxAttr !== null) { const v = __parseLen(dxAttr, fontSize); if (v !== null) x += v; }
-    if (dyAttr !== null) { const v = __parseLen(dyAttr, fontSize); if (v !== null) y += v; }
+  let n = el;
+  const chain = [n];
+  while (true) {
     const kids = n.childNodes ? n.childNodes.filter(c => c.nodeType === 1) : [];
     if (kids.length !== 1) break;
     n = kids[0];
+    chain.push(n);
   }
-  return { x, y };
+  return __accumulatePos(chain, fontSize);
 }
 
 // Collect the per-line tspans of a multi-line label. mermaid wraps each visual
@@ -599,6 +625,13 @@ function __computeBBox(el) {
         if (rm.width > maxW) maxW = rm.width;
       }
       const height = m.ascent + m.descent + (rows.length - 1) * 1.1 * font.size;
+      // The outer <text>'s own y is a vestigial placeholder (see
+      // __resolveTextPos above) that only gets overridden once a *single*
+      // positioning tspan is reached -- but a multi-line label has one row
+      // tspan PER LINE, so that single-child-chain walk stops at <text>
+      // itself and would silently use the wrong, non-"em" y here. Resolve
+      // position via the first row's own y="...em" dy="1.1em" instead.
+      const pos = __accumulatePos(__chainTo(el, rows[0]), font.size);
       let lx = pos.x;
       if (anchor === "middle") lx -= maxW / 2;
       else if (anchor === "end") lx -= maxW;
