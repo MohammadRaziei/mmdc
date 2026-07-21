@@ -192,3 +192,111 @@ def test_multiline_label_uses_first_row_not_outer_text_y():
     # Height = one line box + one extra 1.1em line-step for the 2nd row.
     ascent, descent = FONT_SIZE * 0.8, FONT_SIZE * 0.2
     assert multi["height"] == pytest.approx((ascent + descent) + 1.1 * FONT_SIZE)
+
+
+# ---------------------------------------------------------------------------
+# URL polyfill (issue #25: "ReferenceError: URL is not defined" when a
+# diagram uses `click node "https://..."` link handlers). QuickJS has no
+# built-in URL; mermaid's click-href sanitizer calls `URL.canParse()` and
+# `new URL(...).toString()` for absolute http(s) links.
+# ---------------------------------------------------------------------------
+
+
+def test_url_polyfill_parses_https_url_parts():
+    ctx = _make_ctx()
+    js = """
+    const u = new URL("https://Example.COM:8080/a/b?x=1#frag");
+    JSON.stringify({
+      protocol: u.protocol, hostname: u.hostname, port: u.port,
+      pathname: u.pathname, search: u.search, hash: u.hash, host: u.host,
+    });
+    """
+    parts = json.loads(ctx.eval(js))
+    assert parts == {
+        "protocol": "https:",
+        "hostname": "Example.COM",
+        "port": "8080",
+        "pathname": "/a/b",
+        "search": "?x=1",
+        "hash": "#frag",
+        "host": "Example.COM:8080",
+    }
+
+
+def test_url_polyfill_lowercase_roundtrip_matches_mermaid_usage():
+    """Mirrors exactly what mermaid's sanitize-url helper does: lower-case
+    protocol and hostname in place, then stringify."""
+    ctx = _make_ctx()
+    js = """
+    const u = new URL("HTTPS://Example.COM/path");
+    u.protocol = u.protocol.toLowerCase();
+    u.hostname = u.hostname.toLowerCase();
+    u.toString();
+    """
+    assert ctx.eval(js) == "https://example.com/path"
+
+
+def test_url_canparse_true_for_valid_and_false_for_invalid():
+    ctx = _make_ctx()
+    assert ctx.eval('URL.canParse("https://example.com")') is True
+    assert ctx.eval('URL.canParse("not a url at all ::: %%")') is False
+
+
+# ---------------------------------------------------------------------------
+# Node.compareDocumentPosition (issue #24: "TypeError: not a function" while
+# rendering a sankey diagram). d3 selection's .order() -- used to reorder
+# sankey's <g> layers so links draw under/over nodes correctly -- calls
+# node.compareDocumentPosition(otherNode) directly.
+# ---------------------------------------------------------------------------
+
+
+def test_compare_document_position_siblings():
+    ctx = _make_ctx()
+    js = """
+    const parent = document.createElement("g");
+    const a = document.createElement("rect");
+    const b = document.createElement("rect");
+    parent.appendChild(a);
+    parent.appendChild(b);
+    JSON.stringify({
+      aFollowsB: !!(b.compareDocumentPosition(a) & 4),
+      bFollowsA: !!(a.compareDocumentPosition(b) & 4),
+      aPrecedesB: !!(a.compareDocumentPosition(b) & 2) === false,
+    });
+    """
+    result = json.loads(ctx.eval(js))
+    # a comes before b in document order, so from b's perspective a PRECEDES
+    # (bit 2), and from a's perspective b FOLLOWS (bit 4).
+    assert result["bFollowsA"] is True
+    assert result["aFollowsB"] is False
+
+
+def test_compare_document_position_ancestor_descendant():
+    ctx = _make_ctx()
+    js = """
+    const parent = document.createElement("g");
+    const child = document.createElement("rect");
+    parent.appendChild(child);
+    JSON.stringify({
+      childContainedByParent: !!(parent.compareDocumentPosition(child) & 16),
+      parentContainsChild: !!(child.compareDocumentPosition(parent) & 8),
+    });
+    """
+    result = json.loads(ctx.eval(js))
+    assert result["childContainedByParent"] is True
+    assert result["parentContainsChild"] is True
+
+
+def test_compare_document_position_same_node_and_disconnected():
+    ctx = _make_ctx()
+    js = """
+    const a = document.createElement("rect");
+    const b = document.createElement("rect");  // never attached anywhere
+    JSON.stringify({
+      same: a.compareDocumentPosition(a),
+      disconnected: !!(a.compareDocumentPosition(b) & 1),
+    });
+    """
+    result = json.loads(ctx.eval(js))
+    assert result["same"] == 0
+    assert result["disconnected"] is True

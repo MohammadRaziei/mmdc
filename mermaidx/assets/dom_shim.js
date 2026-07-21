@@ -178,6 +178,51 @@ globalThis.structuredClone = function structuredClone(value, _seen) {
 
 globalThis.Intl = {};
 
+// Minimal URL polyfill -- QuickJS has no built-in URL. mermaid's click-handler
+// code path (sanitizing `click nodeId "https://..."` href targets, via the
+// bundled sanitize-url helper) calls `URL.canParse(str)` and `new URL(str)`,
+// then lower-cases `.protocol`/`.hostname` and reads `.toString()` back. Every
+// call site only ever passes an absolute http(s) URL (other schemes like
+// mailto:/javascript:/custom:// are handled before reaching `new URL`), so a
+// regex-based parser covering scheme/userinfo/host/port/path/query/hash --
+// not the full WHATWG URL spec -- is enough.
+const _URL_RE = /^([a-zA-Z][a-zA-Z\d+\-.]*:)(\/\/(?:([^/?#@]*)@)?([^/?#:]*)(?::(\d*))?)?([^?#]*)(\?[^#]*)?(#.*)?$/;
+class URL {
+  constructor(url, base) {
+    const src = base !== undefined ? new URL(base).toString().replace(/[^/]*$/, "") + String(url) : String(url);
+    const m = _URL_RE.exec(src);
+    if (!m) throw new TypeError(`Invalid URL: ${src}`);
+    this.protocol = m[1] || "";
+    this.username = "";
+    this.password = "";
+    if (m[3]) {
+      const [u, p] = m[3].split(":");
+      this.username = u || "";
+      this.password = p || "";
+    }
+    this.hostname = m[4] || "";
+    this.port = m[5] || "";
+    this.pathname = m[6] || "";
+    this.search = m[7] || "";
+    this.hash = m[8] || "";
+  }
+  get host() { return this.port ? `${this.hostname}:${this.port}` : this.hostname; }
+  get origin() { return this.hostname ? `${this.protocol}//${this.host}` : this.protocol; }
+  get href() { return this.toString(); }
+  set href(v) { Object.assign(this, new URL(v)); }
+  toString() {
+    let auth = "";
+    if (this.username) auth = this.username + (this.password ? `:${this.password}` : "") + "@";
+    const authority = this.hostname ? `//${auth}${this.host}` : "";
+    return `${this.protocol}${authority}${this.pathname}${this.search}${this.hash}`;
+  }
+  toJSON() { return this.toString(); }
+  static canParse(url, base) {
+    try { new URL(url, base); return true; } catch { return false; }
+  }
+}
+globalThis.URL = URL;
+
 // Minimal fake browser environment for mermaid.js layout-only rendering.
 // getBBox / getComputedTextLength call back into Python (via __measureText),
 // which reads real glyph widths from a bundled font (see font_metrics.py).
@@ -237,6 +282,30 @@ class Node {
     if (i !== -1) this.childNodes.splice(i, 1);
     c.parentNode = null;
     return c;
+  }
+  // compareDocumentPosition() -- needed by d3 selection's .order() (used by
+  // e.g. the sankey diagram to reorder <g> layers so links draw under/over
+  // nodes correctly). Only the PRECEDING(2)/FOLLOWING(4)/CONTAINS(8)/
+  // CONTAINED_BY(16)/DISCONNECTED(1) bits are computed -- enough for the
+  // sibling-ordering checks d3/mermaid actually perform; the bookkeeping-only
+  // IMPLEMENTATION_SPECIFIC(32) bit real browsers also set is omitted.
+  compareDocumentPosition(other) {
+    if (other === this) return 0;
+    if (!other) return 1;
+    const pathA = [];
+    for (let n = this; n; n = n.parentNode) pathA.unshift(n);
+    const pathB = [];
+    for (let n = other; n; n = n.parentNode) pathB.unshift(n);
+    if (pathA[0] !== pathB[0]) return 1; // disconnected trees
+    let i = 0;
+    const len = Math.min(pathA.length, pathB.length);
+    while (i < len && pathA[i] === pathB[i]) i++;
+    if (i === pathA.length) return 20; // other is a descendant of this (16|4)
+    if (i === pathB.length) return 10; // other is an ancestor of this (8|2)
+    const parent = pathA[i - 1];
+    const idxA = parent.childNodes.indexOf(pathA[i]);
+    const idxB = parent.childNodes.indexOf(pathB[i]);
+    return idxA < idxB ? 4 : 2;
   }
   // ParentNode.append()/prepend(): newer DOM API distinct from
   // appendChild() -- accepts multiple args and plain strings (which get

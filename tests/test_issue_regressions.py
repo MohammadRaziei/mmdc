@@ -1,0 +1,75 @@
+"""End-to-end regression tests for specific GitHub issues, rendering the
+exact (or lightly trimmed) diagram source reported in each issue through
+the full mermaidx.render().svg() path -- not just the isolated dom_shim
+unit, so a fix can't silently break somewhere else in the pipeline.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+quickjs = pytest.importorskip("quickjs")
+
+import mermaidx
+
+
+def test_issue_25_click_links_with_https_url():
+    """https://github.com/MohammadRaziei/mermaidx/issues/25
+
+    A `click node "https://..."` handler used to crash with
+    "ReferenceError: URL is not defined", since QuickJS has no built-in
+    URL and mermaid's click-href sanitizer needs one for http(s) links.
+    Non-http(s) schemes (mailto, anchors, custom protocols, javascript:)
+    never reach `new URL(...)` and are included here to guard against a
+    regression narrowly scoped to only the https branch.
+    """
+    code = """graph TB
+    TITLE["Link Click Events"]
+    A["same tab"]
+    B["new tab"]
+    C[anchor test]
+    D[mailto test]
+    E[other protocol test]
+    F[script test]
+    TITLE --> A & B & C & D & E & F
+    click A "https://mermaid-js.github.io/mermaid/#/" "same tab"
+    click B "https://mermaid-js.github.io/mermaid/#/" "new tab" _blank
+    click C "#link-clicked"
+    click D "mailto:user@user.user" "mailto test"
+    click E "notes://do-your-thing/id" "other protocol test"
+    click F "javascript:alert('test')" "script test"
+    """
+    svg = mermaidx.render(code).svg()
+    assert svg.startswith("<svg")
+    assert "TITLE" in svg
+    # The two http(s) links must survive sanitization and appear as <a> hrefs.
+    assert 'href="https://mermaid-js.github.io/mermaid/#/"' in svg
+
+
+def test_issue_24_sankey_chart():
+    """https://github.com/MohammadRaziei/mermaidx/issues/24
+
+    Sankey diagrams used to crash with "TypeError: not a function": d3
+    selection's .order() (used to reorder sankey's <g> layers) calls
+    node.compareDocumentPosition(), which the fake DOM never implemented.
+    """
+    code = """sankey
+
+    iPhone,Products,205
+    Mac,Products,40
+    iPad,Products,29
+    Wearables,Products,41
+    Products,Revenue,315
+    Services,Revenue,78
+    Revenue,Cost of Revenue,223
+    Revenue,Gross Profit,170
+    Gross Profit,Op Expenses,51
+    Gross Profit,Op Profit,119
+    Op Profit,Tax,19
+    Op Profit,Net Profit,100
+    """
+    svg = mermaidx.render(code).svg()
+    assert svg.startswith("<svg")
+    # A handful of the node labels should make it into the rendered output.
+    assert "iPhone" in svg
+    assert "Revenue" in svg
