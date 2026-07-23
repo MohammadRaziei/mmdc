@@ -300,3 +300,41 @@ def test_compare_document_position_same_node_and_disconnected():
     result = json.loads(ctx.eval(js))
     assert result["same"] == 0
     assert result["disconnected"] is True
+
+
+# ---------------------------------------------------------------------------
+# CSS.supports("color", value) polyfill (issue #27: "ReferenceError: Option
+# is not defined" when a sequenceDiagram uses `box <color> ...` groups).
+# mermaid's box-color parser tries `window.CSS.supports("color", name)`
+# first and only falls back to a `new Option().style.color = ...` browser
+# trick when `CSS` is missing -- QuickJS has neither, so it always hit that
+# unimplementable fallback.
+# ---------------------------------------------------------------------------
+
+
+def test_css_supports_color_named_colors():
+    ctx = _make_ctx()
+    assert ctx.eval('CSS.supports("color", "Purple")') is True
+    assert ctx.eval('CSS.supports("color", "rebeccapurple")') is True
+    assert ctx.eval('CSS.supports("color", "transparent")') is True
+
+
+def test_css_supports_color_hex_and_functions():
+    ctx = _make_ctx()
+    assert ctx.eval('CSS.supports("color", "#ff00aa")') is True
+    assert ctx.eval('CSS.supports("color", "#f0a")') is True
+    assert ctx.eval('CSS.supports("color", "rgb(10, 20, 30)")') is True
+    assert ctx.eval('CSS.supports("color", "hsla(200, 50%, 50%, 0.5)")') is True
+
+
+def test_css_supports_color_rejects_non_colors():
+    ctx = _make_ctx()
+    assert ctx.eval('CSS.supports("color", "Alice")') is False
+    assert ctx.eval('CSS.supports("color", "not-a-color-at-all")') is False
+
+
+def test_css_supports_only_checks_color_property():
+    """mermaid only ever calls this with prop="color"; other properties
+    should just report unsupported rather than crash."""
+    ctx = _make_ctx()
+    assert ctx.eval('CSS.supports("display", "flex")') is False

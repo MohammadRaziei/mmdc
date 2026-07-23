@@ -223,6 +223,50 @@ class URL {
 }
 globalThis.URL = URL;
 
+// Minimal CSS.supports("color", value) polyfill. QuickJS has no `CSS`
+// global at all. mermaid's sequenceDiagram box-color parsing (`box Purple
+// Alice & John`) tries `window?.CSS.supports("color", name)` first to
+// check whether the leading word is a real CSS color, and only falls back
+// to a `new Option().style.color = ...` trick (which needs a live
+// rendering engine to validate) when `window.CSS` is absent -- so
+// providing `CSS.supports` lets mermaid take its normal modern-browser
+// path instead of hitting that unimplementable fallback.
+const _CSS_NAMED_COLORS = new Set([
+  "transparent", "currentcolor", "inherit", "initial", "unset", "revert",
+  "aliceblue","antiquewhite","aqua","aquamarine","azure","beige","bisque","black",
+  "blanchedalmond","blue","blueviolet","brown","burlywood","cadetblue","chartreuse",
+  "chocolate","coral","cornflowerblue","cornsilk","crimson","cyan","darkblue","darkcyan",
+  "darkgoldenrod","darkgray","darkgreen","darkgrey","darkkhaki","darkmagenta",
+  "darkolivegreen","darkorange","darkorchid","darkred","darksalmon","darkseagreen",
+  "darkslateblue","darkslategray","darkslategrey","darkturquoise","darkviolet","deeppink",
+  "deepskyblue","dimgray","dimgrey","dodgerblue","firebrick","floralwhite","forestgreen",
+  "fuchsia","gainsboro","ghostwhite","gold","goldenrod","gray","green","greenyellow","grey",
+  "honeydew","hotpink","indianred","indigo","ivory","khaki","lavender","lavenderblush",
+  "lawngreen","lemonchiffon","lightblue","lightcoral","lightcyan","lightgoldenrodyellow",
+  "lightgray","lightgreen","lightgrey","lightpink","lightsalmon","lightseagreen",
+  "lightskyblue","lightslategray","lightslategrey","lightsteelblue","lightyellow","lime",
+  "limegreen","linen","magenta","maroon","mediumaquamarine","mediumblue","mediumorchid",
+  "mediumpurple","mediumseagreen","mediumslateblue","mediumspringgreen","mediumturquoise",
+  "mediumvioletred","midnightblue","mintcream","mistyrose","moccasin","navajowhite","navy",
+  "oldlace","olive","olivedrab","orange","orangered","orchid","palegoldenrod","palegreen",
+  "paleturquoise","palevioletred","papayawhip","peachpuff","peru","pink","plum","powderblue",
+  "purple","rebeccapurple","red","rosybrown","royalblue","saddlebrown","salmon","sandybrown",
+  "seagreen","seashell","sienna","silver","skyblue","slateblue","slategray","slategrey",
+  "snow","springgreen","steelblue","tan","teal","thistle","tomato","turquoise","violet",
+  "wheat","white","whitesmoke","yellow","yellowgreen",
+]);
+const _CSS_COLOR_FN_RE = /^(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(.*\)$/i;
+const _CSS_HEX_COLOR_RE = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+globalThis.CSS = {
+  supports(prop, value) {
+    if (typeof prop !== "string") return false;
+    if (value === undefined) return false; // 1-arg "prop: value" form -- not used by mermaid
+    if (prop.toLowerCase() !== "color") return false; // only color checks are needed here
+    const v = String(value).trim();
+    return _CSS_NAMED_COLORS.has(v.toLowerCase()) || _CSS_HEX_COLOR_RE.test(v) || _CSS_COLOR_FN_RE.test(v);
+  },
+};
+
 // Minimal fake browser environment for mermaid.js layout-only rendering.
 // getBBox / getComputedTextLength call back into Python (via __measureText),
 // which reads real glyph widths from a bundled font (see font_metrics.py).

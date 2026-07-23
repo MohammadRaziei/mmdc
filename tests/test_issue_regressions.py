@@ -73,3 +73,41 @@ def test_issue_24_sankey_chart():
     # A handful of the node labels should make it into the rendered output.
     assert "iPhone" in svg
     assert "Revenue" in svg
+
+
+def test_issue_27_sequence_box_groups():
+    """https://github.com/MohammadRaziei/mermaidx/issues/27
+
+    A `box <color> <participants>` group in a sequenceDiagram used to crash
+    with "ReferenceError: Option is not defined". mermaid's box-color
+    parser first tries `window.CSS.supports("color", name)` to check
+    whether the leading word is a real CSS color, only falling back to a
+    `new Option().style.color = ...` browser trick when `CSS` is missing --
+    QuickJS has neither, so it always hit the unimplementable fallback.
+    """
+    code = """sequenceDiagram
+    box Purple Alice & John
+    participant Alice
+    participant John
+    end
+    Alice->>John: Hello John, how are you?
+    John-->>Alice: Great!
+    """
+    svg = mermaidx.render(code).svg()
+    assert svg.startswith("<svg")
+    assert "Alice" in svg and "John" in svg
+
+
+def test_issue_27_sequence_box_without_a_valid_color():
+    """When the leading word isn't a real CSS color, mermaid treats the
+    whole string as the participant list instead -- must not crash either
+    way now that CSS.supports is implemented."""
+    code = """sequenceDiagram
+    box Alice & John
+    participant Alice
+    participant John
+    end
+    Alice->>John: hi
+    """
+    svg = mermaidx.render(code).svg()
+    assert svg.startswith("<svg")
