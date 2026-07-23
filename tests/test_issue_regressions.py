@@ -6,6 +6,8 @@ unit, so a fix can't silently break somewhere else in the pipeline.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 quickjs = pytest.importorskip("quickjs")
@@ -84,6 +86,15 @@ def test_issue_27_sequence_box_groups():
     whether the leading word is a real CSS color, only falling back to a
     `new Option().style.color = ...` browser trick when `CSS` is missing --
     QuickJS has neither, so it always hit the unimplementable fallback.
+
+    Fixing just that crash wasn't the whole story, though: the box then
+    rendered as an opaque rect covering the *entire* diagram, hiding the
+    actors and messages behind it, because mermaid draws the box first and
+    calls d3 selection's `.lower()` to push it behind everything appended
+    after it -- and `.lower()` silently no-ops without a `previousSibling`
+    getter on Node, which the shim never had. So this checks not just that
+    rendering succeeds, but that the box rect actually ends up before (i.e.
+    behind, in SVG paint order) the actor rects in the document.
     """
     code = """sequenceDiagram
     box Purple Alice & John
@@ -96,6 +107,15 @@ def test_issue_27_sequence_box_groups():
     svg = mermaidx.render(code).svg()
     assert svg.startswith("<svg")
     assert "Alice" in svg and "John" in svg
+
+    box_match = re.search(r'<rect[^>]*fill="Purple"[^>]*class="rect"', svg)
+    actor_match = re.search(r'<rect[^>]*class="actor', svg)
+    assert box_match is not None, "expected a purple box <rect> in the output"
+    assert actor_match is not None, "expected actor <rect>s in the output"
+    assert box_match.start() < actor_match.start(), (
+        "the box rect must come before (be drawn behind) the actor rects, "
+        "not painted on top of them"
+    )
 
 
 def test_issue_27_sequence_box_without_a_valid_color():

@@ -338,3 +338,57 @@ def test_css_supports_only_checks_color_property():
     should just report unsupported rather than crash."""
     ctx = _make_ctx()
     assert ctx.eval('CSS.supports("display", "flex")') is False
+
+
+# ---------------------------------------------------------------------------
+# Node.previousSibling (issue #27, follow-up: the box-color crash was fixed
+# by the CSS.supports polyfill above, but the box then rendered as an
+# opaque rect covering the whole diagram. Root cause: mermaid calls d3
+# selection's .lower() on the box's <g> to push it behind the actors/
+# messages appended after it; .lower() is
+# `this.previousSibling && this.parentNode.insertBefore(this, this.parentNode.firstChild)`
+# -- and previousSibling was simply missing from Node, so it silently
+# no-opped instead of throwing.
+# ---------------------------------------------------------------------------
+
+
+def test_previous_sibling_basic():
+    ctx = _make_ctx()
+    js = """
+    const parent = document.createElement("g");
+    const a = document.createElement("rect");
+    const b = document.createElement("rect");
+    const c = document.createElement("rect");
+    parent.appendChild(a);
+    parent.appendChild(b);
+    parent.appendChild(c);
+    JSON.stringify({
+      aPrev: a.previousSibling === null,
+      bPrev: b.previousSibling === a,
+      cPrev: c.previousSibling === b,
+    });
+    """
+    result = json.loads(ctx.eval(js))
+    assert result == {"aPrev": True, "bPrev": True, "cPrev": True}
+
+
+def test_previous_sibling_matches_d3_lower_pattern():
+    """Reproduces d3's actual .lower() body against the shim directly:
+    a node with no previousSibling is left alone; a node with one gets
+    moved to be the parent's first child."""
+    ctx = _make_ctx()
+    js = """
+    function lower(node) {
+      if (node.previousSibling) node.parentNode.insertBefore(node, node.parentNode.firstChild);
+    }
+    const parent = document.createElement("g");
+    const a = document.createElement("rect");
+    const b = document.createElement("rect");
+    const c = document.createElement("rect");
+    parent.appendChild(a);
+    parent.appendChild(b);
+    parent.appendChild(c);
+    lower(c);  // c had siblings before it -> should become the first child
+    JSON.stringify(parent.childNodes.map(n => n === a ? "a" : n === b ? "b" : "c"));
+    """
+    assert json.loads(ctx.eval(js)) == ["c", "a", "b"]

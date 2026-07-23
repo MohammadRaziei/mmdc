@@ -392,6 +392,11 @@ class Node {
     const i = this.parentNode.childNodes.indexOf(this);
     return this.parentNode.childNodes[i+1] || null;
   }
+  get previousSibling() {
+    if (!this.parentNode) return null;
+    const i = this.parentNode.childNodes.indexOf(this);
+    return i > 0 ? this.parentNode.childNodes[i-1] : null;
+  }
   cloneNode(deep) {
     const c = Object.create(Object.getPrototypeOf(this));
     Object.assign(c, this, { childNodes: [], parentNode: null, _attrs: {...(this._attrs||{})} });
