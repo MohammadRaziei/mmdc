@@ -230,3 +230,63 @@ def test_issue_28_treemap_value_label_position():
     assert value_ys, "expected at least one treemapValue text element"
     for y in value_ys:
         assert y != "NaN", "treemapValue label must not land at y=NaN"
+
+def test_issue_26_flowchart_title_not_clipped():
+    """https://github.com/MohammadRaziei/mermaidx/issues/26
+
+    The diagram title (set via YAML front-matter) rendered outside the
+    SVG's viewBox and got clipped. mermaid's title text only carries
+    class="flowchartTitleText" (font-size set via CSS, not inline style
+    or an attribute), and font resolution had two bugs stacked: (1) CSS
+    class rules were never consulted at all, and (2) once they were, the
+    walk-up-the-tree cascade let a farther, more generic ancestor
+    overwrite the nearer, more specific value it had just found on the
+    title element itself. Either bug alone under-measured the title,
+    which under-sized the viewBox this bbox feeds into.
+    """
+    code = """---
+title: Subgraph nodeSpacing and rankSpacing example
+config:
+  flowchart:
+    nodeSpacing: 1
+    rankSpacing: 1
+---
+
+flowchart LR
+
+X --> Y
+
+subgraph X
+  direction LR
+  A
+  C
+end
+
+subgraph Y
+  direction LR
+  B
+  D
+end
+"""
+    from mermaidx.font_metrics import get_font
+
+    svg = mermaidx.render(code).svg()
+    assert svg.startswith("<svg")
+
+    vb = re.search(r'viewBox="([^"]*)"', svg)
+    assert vb, "expected a viewBox attribute"
+    vb_x0, vb_y0, vb_w, vb_h = (float(v) for v in vb.group(1).split())
+
+    title = re.search(
+        r'<text text-anchor="middle" x="([^"]*)"[^>]*class="flowchartTitleText">'
+        r"([^<]*)</text>",
+        svg,
+    )
+    assert title, "expected the title text element"
+    title_x = float(title.group(1))
+    title_text = title.group(2)
+
+    width = get_font("normal").measure(title_text, 18)["width"]
+    left, right = title_x - width / 2, title_x + width / 2
+    assert left >= vb_x0, "title runs off the left edge of the viewBox"
+    assert right <= vb_x0 + vb_w, "title runs off the right edge of the viewBox"

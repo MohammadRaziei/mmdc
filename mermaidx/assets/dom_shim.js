@@ -550,20 +550,43 @@ class Element extends Node {
 
 // --- bbox computation --------------------------------------------------
 function __resolveFont(el) {
-  // Walk up for inherited font properties (very small cascade: inline style + attrs)
-  let size = 16, family = "sans-serif", weight = "normal", style = "normal";
+  // Walk up for inherited font properties. Nearer (more specific) values
+  // must win over farther ancestors' -- e.g. the diagram title only carries
+  // class="flowchartTitleText" (font-size: 18px via CSS), while some
+  // ancestor group carries a generic inline font-size for the rest of the
+  // diagram; since we walk from the element up to the root, the FIRST
+  // match found for each property is the closest and must not be
+  // overwritten by a later (farther) one. Within a single node, inline
+  // style/attribute still outrank that node's own CSS class rule.
+  let size, family, weight, style = "normal";
   let n = el;
   while (n && n.nodeType === 1) {
+    let nSize, nFamily, nWeight;
+
+    const cssSize = __resolveCssProp(n, "font-size");
+    if (cssSize) { const v = parseFloat(cssSize); if (!Number.isNaN(v)) nSize = v; }
+    const cssFamily = __resolveCssProp(n, "font-family");
+    if (cssFamily) nFamily = cssFamily.trim();
+    const cssWeight = __resolveCssProp(n, "font-weight");
+    if (cssWeight) nWeight = cssWeight.trim();
+
     const s = n.style;
     if (s && s.cssText) {
-      const fs = /font-size:\s*([0-9.]+)px/.exec(s.cssText); if (fs) size = parseFloat(fs[1]);
-      const ff = /font-family:\s*([^;]+)/.exec(s.cssText); if (ff) family = ff[1].trim();
-      const fw = /font-weight:\s*([^;]+)/.exec(s.cssText); if (fw) weight = fw[1].trim();
+      const fs = /font-size:\s*([0-9.]+)px/.exec(s.cssText); if (fs) nSize = parseFloat(fs[1]);
+      const ff = /font-family:\s*([^;]+)/.exec(s.cssText); if (ff) nFamily = ff[1].trim();
+      const fw = /font-weight:\s*([^;]+)/.exec(s.cssText); if (fw) nWeight = fw[1].trim();
     }
-    if (n.hasAttribute && n.hasAttribute("font-size")) size = parseFloat(n.getAttribute("font-size"));
-    if (n.hasAttribute && n.hasAttribute("font-family")) family = n.getAttribute("font-family");
+    if (n.hasAttribute && n.hasAttribute("font-size")) nSize = parseFloat(n.getAttribute("font-size"));
+    if (n.hasAttribute && n.hasAttribute("font-family")) nFamily = n.getAttribute("font-family");
+
+    if (size === undefined && nSize !== undefined) size = nSize;
+    if (family === undefined && nFamily !== undefined) family = nFamily;
+    if (weight === undefined && nWeight !== undefined) weight = nWeight;
     n = n.parentNode;
   }
+  if (size === undefined) size = 16;
+  if (family === undefined) family = "sans-serif";
+  if (weight === undefined) weight = "normal";
   return { size, family, weight, style };
 }
 
