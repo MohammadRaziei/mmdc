@@ -62,9 +62,12 @@ print(mermaidx.backends())
 | Backend | Engine Type | Features & Performance |
 | --- | --- | --- |
 | `quickjs` *(default)* | Embedded JS (QuickJS-ng) | Lightweight, zero-config, always available. Runs real `mermaid.js` in-process. Safe for all diagram types (including `mindmap`). |
-| `v8` | Real V8 JIT (`mini-racer`) | **2–4.5x faster** JIT execution for large diagrams. Byte-for-byte identical SVG output*1*. |
-| `merman` | Native Rust (`mmdr`) | Pure Rust implementation — no JavaScript engine involved*2*. |
-| `mermaid-rs-renderer` | Native Rust (`mmdr`) | Alternative pure-Rust renderer from `mmdr`*2*. |
+| `v8` | Real V8 JIT (`mini-racer`) | **2–4.5x faster** JIT execution for large diagrams. Byte-for-byte identical SVG output.¹ |
+| `merman` | Native Rust (`mmdr`) | Pure Rust implementation — no JavaScript engine involved.² |
+| `mermaid-rs-renderer` | Native Rust (`mmdr`) | Alternative pure-Rust renderer from `mmdr`.² |
+
+¹ Except `mindmap` — see the Mindmap Exception note above; `v8` falls back to `quickjs` there, in a separate child process so a stuck render can't leak memory.
+² Every backend shares the same `mermaidx` `DiagramBase` — only `svg()` differs per backend, everything downstream of it (PNG/PDF/raw/numpy) is the same resvg + PDF-writer pipeline for all of them, so PDF/raw/numpy come along for free here too.
 
 ```python
 # Unified interface regardless of backend:
